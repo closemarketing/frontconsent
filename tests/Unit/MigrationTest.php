@@ -115,4 +115,32 @@ class MigrationTest extends TestCase {
 
 		$this->assertFalse( $options['enable_cookie_notice'] );
 	}
+
+	/**
+	 * The guard is claimed atomically via add_option() (not a plain
+	 * get_option()/update_option() check-then-act pair) so that a request
+	 * finding the flag already set by another concurrent request never
+	 * re-runs migrate_stats() — whose additive counters would otherwise be
+	 * double-counted.
+	 */
+	public function test_migration_does_not_double_count_stats_when_the_flag_is_already_claimed() {
+		// Simulate another concurrent request having already claimed the
+		// guard and completed the migration.
+		add_option( Migration::DONE_FLAG, true, '', 'no' );
+		update_option(
+			\FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED,
+			5,
+			false
+		);
+
+		update_option( 'frontblocks_settings', array( 'enable_cookie_notice' => true ) );
+		update_option( 'frontblocks_cookie_notice_accepted_count', 10 );
+
+		Migration::maybe_run();
+
+		$this->assertSame( 5, (int) get_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED ) );
+
+		delete_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED );
+		delete_option( 'frontblocks_cookie_notice_accepted_count' );
+	}
 }

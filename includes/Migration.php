@@ -65,10 +65,16 @@ class Migration {
 	 * actual copy only ever happens once, and does nothing at all when
 	 * FrontBlocks was never installed on this site.
 	 *
+	 * The guard itself is claimed atomically via add_option(), which fails
+	 * (returns false) if another request already inserted the row first —
+	 * a plain get_option()/update_option() check-then-act pair would let two
+	 * concurrent first requests both see the flag missing and both run the
+	 * migration, double-counting migrate_stats()'s additive counters.
+	 *
 	 * @return void
 	 */
 	public static function maybe_run() {
-		if ( get_option( self::DONE_FLAG, false ) ) {
+		if ( ! add_option( self::DONE_FLAG, true, '', 'no' ) ) {
 			return;
 		}
 
@@ -79,8 +85,6 @@ class Migration {
 			self::migrate_stats();
 			self::disable_frontblocks_cookie_notice();
 		}
-
-		update_option( self::DONE_FLAG, true, false );
 	}
 
 	/**

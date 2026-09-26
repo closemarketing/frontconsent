@@ -188,4 +188,22 @@ class CookieNoticePolicyPageTest extends TestCase {
 
 		$this->assertStringContainsString( '"isPolicyPage":""', $data );
 	}
+
+	/**
+	 * The script must be enqueued to print in <head>, not the footer — its
+	 * CSP-fallback Consent Mode default (setConsentModeDefault(), called at
+	 * parse time) needs to run before any independently loaded, Consent
+	 * Mode-aware tag placed later in <head>; a footer placement would run
+	 * far too late to matter.
+	 */
+	public function test_script_is_enqueued_in_the_head_not_the_footer() {
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$this->cookie_notice->enqueue_assets();
+
+		$in_footer = wp_scripts()->get_data( 'frontconsent-cookie-notice', 'group' );
+
+		$this->assertNotSame( 1, $in_footer );
+	}
 }

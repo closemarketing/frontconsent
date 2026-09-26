@@ -306,7 +306,12 @@ class CookieNotice {
 			FRCN_PLUGIN_URL . 'assets/cookie-notice/frontconsent-cookie-notice.js',
 			array(),
 			FRCN_VERSION,
-			true
+			// Printed in <head>, not the footer: this is what lets the script's
+			// own CSP-fallback Consent Mode default (see its top-level
+			// setConsentModeDefault() call) run before any independently
+			// enqueued, Consent Mode-aware tag placed later in <head> — a
+			// footer placement would run far too late to matter.
+			false
 		);
 
 		wp_localize_script(

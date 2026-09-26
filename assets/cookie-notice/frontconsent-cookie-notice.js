@@ -8,6 +8,20 @@
 (function () {
 	'use strict';
 
+	// Run immediately, at parse time — not gated by DOMContentLoaded. This is
+	// the CSP fallback for the inline wp_head script (render_consent_mode_default()):
+	// on a site whose Content Security Policy blocks that unnonced inline
+	// script, this is what actually establishes Consent Mode's default state
+	// before any independently loaded, Consent Mode-aware tag (e.g. Google
+	// Site Kit) reads it. That only works if this file is enqueued to print
+	// in <head> (in_footer: false — see enqueue_assets()) and this call runs
+	// before deferring to DOMContentLoaded; waiting for the DOM to be ready
+	// would be too late; a tag placed earlier in <head> could already have
+	// initialized with Google's own default (granted) by then.
+	if (typeof frcnCookieNotice !== 'undefined') {
+		setConsentModeDefault();
+	}
+
 	if (document.readyState === 'loading') {
 		document.addEventListener('DOMContentLoaded', init);
 	} else {
@@ -173,8 +187,7 @@
 			window.dataLayer.push(arguments);
 		};
 
-		var isStale = typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale();
-		var granted = !isStale && readCookie(frcnCookieNotice.cookieName) === 'accepted' ? 'granted' : 'denied';
+		var granted = readCookie(frcnCookieNotice.cookieName) === 'accepted' ? 'granted' : 'denied';
 		var state = {
 			ad_storage: granted,
 			ad_user_data: granted,
@@ -182,12 +195,31 @@
 			analytics_storage: granted
 		};
 
+		// An add-on tracking per-category consent (analytics vs. marketing)
+		// can define this — reading its own cookie the same way — to send the
+		// granular signals Consent Mode actually expects instead of this
+		// binary default.
 		if (typeof window.frcnCookieNoticeConsentModeState === 'function') {
 			var overrideState = window.frcnCookieNoticeConsentModeState();
 
 			if (overrideState) {
 				state = overrideState;
 			}
+		}
+
+		// Applied last, after any override: an add-on reporting its own
+		// per-category consent as stale (e.g. the site admin just added a
+		// new integration) means a fresh decision is needed, so deny by
+		// default regardless of what the override state said — otherwise a
+		// stale "granted" from before the new integration was added would
+		// leak through while the visitor is being re-prompted.
+		if (typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale()) {
+			state = {
+				ad_storage: 'denied',
+				ad_user_data: 'denied',
+				ad_personalization: 'denied',
+				analytics_storage: 'denied'
+			};
 		}
 
 		window.gtag('consent', 'default', state);
@@ -198,7 +230,6 @@
 			return;
 		}
 
-		setConsentModeDefault();
 		defineInjectHelper();
 
 		var isStale = typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale();
@@ -238,6 +269,8 @@
 	 * undecided banner exactly the way a first-time visitor gets one,
 	 * instead of duplicating that logic client-side.
 	 */
+	var reopenTriggerWired = false;
+
 	function setUpReopenTrigger() {
 		var reopenBtn = document.getElementById('frcn-cookie-reopen');
 
@@ -252,6 +285,15 @@
 		}
 
 		reopenBtn.hidden = false;
+
+		if (reopenTriggerWired) {
+			// Already bound on the initial DOMContentLoaded pass — this second
+			// call (from handleDecision(), right after a same-page decision)
+			// only needed to reveal the button, not rebind its click handler.
+			return;
+		}
+
+		reopenTriggerWired = true;
 		reopenBtn.addEventListener('click', function () {
 			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
 
@@ -383,6 +425,7 @@
 			setConsentCookie(decision);
 			updateConsentMode(decision);
 			hideBanner();
+			setUpReopenTrigger();
 			dispatchConsentEvent(decision);
 			logDecision(decision);
 

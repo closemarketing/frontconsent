@@ -274,3 +274,106 @@ test('accepting sends the consent update through gtag(), not a raw dataLayer pus
 		'expected a consent update entry queued via gtag()'
 	);
 });
+
+test('reopen trigger is revealed immediately after an in-page decision, without a reload', async () => {
+	const environment = createEnvironment();
+
+	assert.equal(environment.reopenBtn.hidden, true);
+
+	environment.actionListeners.accept.click();
+	await new Promise((resolve) => setImmediate(resolve));
+
+	assert.equal(environment.reopenBtn.hidden, false);
+});
+
+test('consent mode default runs immediately at parse time, before DOMContentLoaded fires', () => {
+	// createEnvironment() always fires DOMContentLoaded itself, so this
+	// inspects dataLayer right after vm.runInNewContext() but before that —
+	// by re-running the same setup manually instead of via the shared helper.
+	const dataLayerEntries = [];
+	const context = {
+		Array,
+		CustomEvent: function () {},
+		Date,
+		FormData: function () { this.append = function () {}; },
+		decodeURIComponent,
+		document: {
+			readyState: 'loading',
+			cookie: '',
+			addEventListener() {},
+			getElementById() { return null; }
+		},
+		encodeURIComponent,
+		fetch() { return Promise.resolve({ json: () => Promise.resolve({ success: false }) }); },
+		frcnCookieNotice: {
+			ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
+			cookieName: 'frcn_cookie_consent',
+			cookiePath: '/',
+			expirationDays: 365,
+			isPolicyPage: '',
+			homeUrl: 'https://example.test/'
+		},
+		window: {
+			get dataLayer() { return dataLayerEntries; },
+			set dataLayer(value) { dataLayerEntries.length = 0; dataLayerEntries.push(...value); },
+			location: { protocol: 'https:' },
+			setTimeout(callback) { callback(); }
+		}
+	};
+
+	vm.runInNewContext(cookieNoticeScript, context);
+
+	// No DOMContentLoaded was fired above — if a 'consent default' entry is
+	// already queued, setConsentModeDefault() ran at parse time as intended.
+	assert.ok(
+		dataLayerEntries.some((entry) => entry && entry[0] === 'consent' && entry[1] === 'default'),
+		'expected a consent default entry queued before DOMContentLoaded'
+	);
+});
+
+test('a stale-consent report overrides a granted per-category override state back to denied', () => {
+	const dataLayerEntries = [];
+	const context = {
+		Array,
+		CustomEvent: function () {},
+		Date,
+		FormData: function () { this.append = function () {}; },
+		decodeURIComponent,
+		document: {
+			readyState: 'loading',
+			cookie: '',
+			addEventListener() {},
+			getElementById() { return null; }
+		},
+		encodeURIComponent,
+		fetch() { return Promise.resolve({ json: () => Promise.resolve({ success: false }) }); },
+		frcnCookieNotice: {
+			ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
+			cookieName: 'frcn_cookie_consent',
+			cookiePath: '/',
+			expirationDays: 365,
+			isPolicyPage: '',
+			homeUrl: 'https://example.test/'
+		},
+		window: {
+			get dataLayer() { return dataLayerEntries; },
+			set dataLayer(value) { dataLayerEntries.length = 0; dataLayerEntries.push(...value); },
+			location: { protocol: 'https:' },
+			setTimeout(callback) { callback(); },
+			// An add-on reporting a (stale) granted override, plus staleness.
+			frcnCookieNoticeConsentModeState() {
+				return { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' };
+			},
+			frcnCookieNoticeIsConsentStale() {
+				return true;
+			}
+		}
+	};
+
+	vm.runInNewContext(cookieNoticeScript, context);
+
+	const defaultEntry = dataLayerEntries.find((entry) => entry && entry[0] === 'consent' && entry[1] === 'default');
+
+	assert.ok(defaultEntry, 'expected a consent default entry');
+	assert.equal(defaultEntry[2].analytics_storage, 'denied');
+});
