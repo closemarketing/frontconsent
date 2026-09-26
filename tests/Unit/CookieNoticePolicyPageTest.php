@@ -51,12 +51,17 @@ class CookieNoticePolicyPageTest extends TestCase {
 	/**
 	 * The banner must never render on the page the admin configured as the
 	 * cookie policy page — otherwise a popup layout would immediately cover
-	 * the very content the visitor is trying to read before deciding.
+	 * the very content the visitor is trying to read before deciding. The
+	 * persistent "Cookie preferences" reopen trigger is unaffected by this
+	 * suppression and still renders there.
 	 */
 	public function test_banner_is_suppressed_on_the_configured_policy_page() {
 		$this->go_to( get_permalink( $this->policy_page_id ) );
 
-		$this->assertSame( '', $this->render_banner_html() );
+		$html = $this->render_banner_html();
+
+		$this->assertStringNotContainsString( 'id="frcn-cookie-notice"', $html );
+		$this->assertStringContainsString( 'id="frcn-cookie-reopen"', $html );
 	}
 
 	/**
@@ -68,6 +73,20 @@ class CookieNoticePolicyPageTest extends TestCase {
 		$this->go_to( get_permalink( $other_page_id ) );
 
 		$this->assertStringContainsString( 'id="frcn-cookie-notice"', $this->render_banner_html() );
+	}
+
+	/**
+	 * The "Cookie preferences" reopen trigger must render hidden by default —
+	 * never gated by the visitor's own consent cookie, so a full-page cache
+	 * stays safe; JS reveals it once a decision cookie actually exists.
+	 */
+	public function test_reopen_trigger_renders_hidden_by_default() {
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$html = $this->render_banner_html();
+
+		$this->assertMatchesRegularExpression( '/<button[^>]*id="frcn-cookie-reopen"[^>]*\bhidden\b/', $html );
 	}
 
 	/**

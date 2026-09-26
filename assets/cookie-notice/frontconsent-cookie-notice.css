@@ -280,3 +280,37 @@ body.frcn-cookie-notice-lock-scroll {
 		transition: none;
 	}
 }
+
+/*
+ * Persistent trigger letting a visitor who already decided reopen the
+ * banner to change their mind. Hidden by default in markup (see the
+ * `hidden` attribute in CookieNotice::render_reopen_trigger()) and only
+ * revealed by JS once a decision cookie actually exists, matching the
+ * cache-neutral approach the banner itself uses.
+ */
+.frcn-cookie-reopen {
+	position: fixed;
+	z-index: 999998;
+	left: 16px;
+	bottom: 16px;
+	appearance: none;
+	border: 1px solid #d1d5db;
+	border-radius: 999px;
+	background-color: #ffffff;
+	color: #1f2937;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.2;
+	padding: 8px 14px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+	cursor: pointer;
+}
+
+.frcn-cookie-reopen:hover {
+	filter: brightness(0.97);
+}
+
+.frcn-cookie-reopen:focus-visible {
+	outline: 2px solid #687df9;
+	outline-offset: 2px;
+}

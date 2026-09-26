@@ -59,7 +59,7 @@ function frcn_plugin_activation_redirect() {
 
 	if ( get_option( 'frcn_activation_redirect', false ) ) {
 		delete_option( 'frcn_activation_redirect' );
-		wp_safe_redirect( admin_url( 'admin.php?page=frontconsent-settings' ) );
+		wp_safe_redirect( admin_url( 'options-general.php?page=frontconsent-settings' ) );
 		exit;
 	}
 }

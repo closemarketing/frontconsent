@@ -226,34 +226,37 @@ class Settings {
 
 				<div class="frcn-panel">
 					<?php
-					// Site Kit-managed types are hidden from the list and never
-					// re-added: the "Google tag is managed by Site Kit" notice
-					// below is the only UI shown for them.
-					$site_kit_managed_types = array_keys(
-						array_filter(
-							array(
-								'gtm' => $site_kit_tags['gtm'],
-								'ga4' => $site_kit_tags['ga4'],
-							)
-						)
-					);
-					$visible_integrations   = array_values(
-						array_filter(
-							$tracking_integrations,
-							static function ( $integration ) use ( $site_kit_managed_types ) {
-								return ! in_array( $integration['type'], $site_kit_managed_types, true );
-							}
-						)
-					);
-					$gtm_integration        = null;
+					// An integration is only treated as Site Kit-managed (hidden from
+					// the list, shown in the notice below instead) when its own ID
+					// matches Site Kit's configured one — a different GTM/GA4 ID the
+					// admin added here is not a duplicate and must stay visible.
+					$gtm_integration = null;
+					$ga4_integration = null;
 					foreach ( $tracking_integrations as $integration ) {
 						if ( 'gtm' === $integration['type'] ) {
 							$gtm_integration = $integration['id'];
-							break;
+						} elseif ( 'ga4' === $integration['type'] ) {
+							$ga4_integration = $integration['id'];
 						}
 					}
+					$gtm_is_site_kit_managed = '' !== $site_kit_tags['gtm'] && strtoupper( (string) $gtm_integration ) === $site_kit_tags['gtm'];
+					$ga4_is_site_kit_managed = '' !== $site_kit_tags['ga4'] && strtoupper( (string) $ga4_integration ) === $site_kit_tags['ga4'];
+					$visible_integrations    = array_values(
+						array_filter(
+							$tracking_integrations,
+							static function ( $integration ) use ( $gtm_is_site_kit_managed, $ga4_is_site_kit_managed ) {
+								if ( 'gtm' === $integration['type'] && $gtm_is_site_kit_managed ) {
+									return false;
+								}
+								if ( 'ga4' === $integration['type'] && $ga4_is_site_kit_managed ) {
+									return false;
+								}
+								return true;
+							}
+						)
+					);
 					?>
-					<?php if ( $site_kit_tags['gtm'] || $site_kit_tags['ga4'] ) : ?>
+					<?php if ( $gtm_is_site_kit_managed || $ga4_is_site_kit_managed ) : ?>
 						<p class="frcn-hint"><?php echo esc_html__( 'Google Site Kit manages the configured Google tag. FrontConsent applies Consent Mode to it, so no duplicate ID is needed here.', 'frontconsent' ); ?></p>
 					<?php endif; ?>
 
@@ -347,7 +350,7 @@ class Settings {
 						id="cookie_notice_message"
 						name="<?php echo esc_attr( self::OPTION_NAME ); ?>[cookie_notice_message]"
 						rows="3"
-						placeholder="<?php echo esc_attr__( 'We use cookies to improve your experience on our website. By browsing this website, you agree to our use of cookies.', 'frontconsent' ); ?>"
+						placeholder="<?php echo esc_attr__( 'We use cookies to improve your experience on our website. Please choose whether to accept or reject them.', 'frontconsent' ); ?>"
 						class="frcn-input"
 					><?php echo esc_textarea( $message ); ?></textarea>
 
@@ -533,7 +536,7 @@ class Settings {
 										<?php echo CookieNotice::get_cookie_icon_svg(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static inline SVG, no dynamic data. ?>
 									</span>
 									<p class="frcn-cookie-notice__message">
-										<?php echo esc_html( '' !== $message ? $message : __( 'We use cookies to improve your experience on our website. By browsing this website, you agree to our use of cookies.', 'frontconsent' ) ); ?>
+										<?php echo esc_html( '' !== $message ? $message : __( 'We use cookies to improve your experience on our website. Please choose whether to accept or reject them.', 'frontconsent' ) ); ?>
 									</p>
 									<div class="frcn-cookie-notice__actions">
 										<button type="button" class="frcn-cookie-notice__button frcn-cookie-notice__button--reject" disabled>
@@ -610,14 +613,19 @@ class Settings {
 	}
 
 	/**
-	 * Get the Google tags that Site Kit is configured to place.
+	 * Get the Google tag IDs that Site Kit is configured to place.
 	 *
-	 * @return array{gtm: bool, ga4: bool}
+	 * Returning the actual ID (rather than a bare bool) is what lets the
+	 * caller treat only an identical container/measurement ID as managed by
+	 * Site Kit — a different one configured in FrontConsent must still be
+	 * shown and used, not hidden as if it were a duplicate.
+	 *
+	 * @return array{gtm: string, ga4: string}
 	 */
 	private function get_google_site_kit_managed_tags() {
 		$tags = array(
-			'gtm' => false,
-			'ga4' => false,
+			'gtm' => '',
+			'ga4' => '',
 		);
 
 		if ( ! defined( 'GOOGLESITEKIT_VERSION' ) && ! class_exists( '\\Google\\Site_Kit\\Plugin' ) ) {
@@ -626,12 +634,12 @@ class Settings {
 
 		$tag_manager_settings = get_option( 'googlesitekit_tagmanager_settings', array() );
 		if ( is_array( $tag_manager_settings ) && ! empty( $tag_manager_settings['containerID'] ) && ( ! isset( $tag_manager_settings['useSnippet'] ) || $tag_manager_settings['useSnippet'] ) ) {
-			$tags['gtm'] = true;
+			$tags['gtm'] = strtoupper( (string) $tag_manager_settings['containerID'] );
 		}
 
 		$analytics_settings = get_option( 'googlesitekit_analytics-4_settings', array() );
 		if ( is_array( $analytics_settings ) && ! empty( $analytics_settings['measurementID'] ) && ( ! isset( $analytics_settings['useSnippet'] ) || $analytics_settings['useSnippet'] ) ) {
-			$tags['ga4'] = true;
+			$tags['ga4'] = strtoupper( (string) $analytics_settings['measurementID'] );
 		}
 
 		return $tags;

@@ -15,6 +15,7 @@ function createEnvironment(options = {}) {
 	const fetchActions = [];
 	const listeners = {};
 	const actionListeners = {};
+	const reopenListeners = {};
 	const banner = {
 		classList: {
 			add() {},
@@ -37,6 +38,12 @@ function createEnvironment(options = {}) {
 		querySelectorAll() { return []; },
 		style: {}
 	};
+	const reopenBtn = {
+		hidden: true,
+		addEventListener(event, callback) {
+			reopenListeners[event] = callback;
+		}
+	};
 	const document = {
 		activeElement: null,
 		body: { classList: { add() {}, remove() {} } },
@@ -46,7 +53,7 @@ function createEnvironment(options = {}) {
 		addEventListener(event, callback) { listeners[event] = callback; },
 		createElement() { return {}; },
 		dispatchEvent() {},
-		getElementById() { return banner; },
+		getElementById(id) { return id === 'frcn-cookie-reopen' ? reopenBtn : banner; },
 		getElementsByTagName() { return []; },
 		removeEventListener() {}
 	};
@@ -96,7 +103,7 @@ function createEnvironment(options = {}) {
 	vm.runInNewContext(cookieNoticeScript, context);
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, fetchActions, fetchCalls: () => fetchCalls, scripts, window };
+	return { actionListeners, fetchActions, fetchCalls: () => fetchCalls, reopenBtn, reopenListeners, scripts, window };
 }
 
 test('does not load ChatGPT Ads before consent and loads it after acceptance', async () => {
@@ -204,4 +211,25 @@ test('does not load ChatGPT Ads after explicit rejection', async () => {
 	assert.equal(environment.fetchActions.includes('frcn_get_cookie_notice_config'), false);
 	assert.equal(environment.scripts.length, 0);
 	assert.equal(environment.window.oaiq, undefined);
+});
+
+test('reopen trigger stays hidden when no decision has been made yet', () => {
+	const environment = createEnvironment();
+
+	assert.equal(environment.reopenBtn.hidden, true);
+	assert.equal(environment.reopenListeners.click, undefined);
+});
+
+test('reopen trigger is revealed and clears the consent cookie on click', () => {
+	const environment = createEnvironment({ cookie: 'frcn_cookie_consent=accepted' });
+
+	assert.equal(environment.reopenBtn.hidden, false);
+	assert.equal(typeof environment.reopenListeners.click, 'function');
+
+	let reloaded = false;
+	environment.window.location.reload = () => { reloaded = true; };
+
+	environment.reopenListeners.click();
+
+	assert.equal(reloaded, true);
 });

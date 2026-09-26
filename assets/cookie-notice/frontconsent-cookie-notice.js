@@ -157,11 +157,48 @@
 	 * the DOM at all, so it can never do the hiding itself — only this file,
 	 * running once the DOM is ready, can.
 	 */
+	/**
+	 * Set Google Consent Mode's default state. Normally the inline script
+	 * printed on wp_head (render_consent_mode_default()) already does this,
+	 * as early as possible, before this registered file even loads. This is
+	 * the fallback for a site whose Content Security Policy blocks that
+	 * unnonced inline script: without it, a Consent Mode-aware tag loaded
+	 * independently (e.g. Google Site Kit) would run with Google's own
+	 * default (granted) instead of denied, since nothing would ever have
+	 * told it otherwise.
+	 */
+	function setConsentModeDefault() {
+		window.dataLayer = window.dataLayer || [];
+		window.gtag = window.gtag || function () {
+			window.dataLayer.push(arguments);
+		};
+
+		var isStale = typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale();
+		var granted = !isStale && readCookie(frcnCookieNotice.cookieName) === 'accepted' ? 'granted' : 'denied';
+		var state = {
+			ad_storage: granted,
+			ad_user_data: granted,
+			ad_personalization: granted,
+			analytics_storage: granted
+		};
+
+		if (typeof window.frcnCookieNoticeConsentModeState === 'function') {
+			var overrideState = window.frcnCookieNoticeConsentModeState();
+
+			if (overrideState) {
+				state = overrideState;
+			}
+		}
+
+		window.gtag('consent', 'default', state);
+	}
+
 	function requestTrackingIfNeeded() {
 		if (window.frcnCookieNoticeBootstrapped) {
 			return;
 		}
 
+		setConsentModeDefault();
 		defineInjectHelper();
 
 		var isStale = typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale();
@@ -192,12 +229,42 @@
 		return false;
 	}
 
+	/**
+	 * Reveal the persistent "Cookie preferences" trigger once a decision
+	 * cookie exists, and wire it to let the visitor withdraw an acceptance or
+	 * replace a rejection at any time — the only way to do so short of
+	 * deleting the cookie by hand. Reloading the page after clearing the
+	 * cookie is deliberately simple: it lets the server render a fresh,
+	 * undecided banner exactly the way a first-time visitor gets one,
+	 * instead of duplicating that logic client-side.
+	 */
+	function setUpReopenTrigger() {
+		var reopenBtn = document.getElementById('frcn-cookie-reopen');
+
+		if (!reopenBtn) {
+			return;
+		}
+
+		var consent = readCookie(frcnCookieNotice.cookieName);
+
+		if (consent !== 'accepted' && consent !== 'rejected') {
+			return;
+		}
+
+		reopenBtn.hidden = false;
+		reopenBtn.addEventListener('click', function () {
+			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
+			window.location.reload();
+		});
+	}
+
 	function init() {
 		if (typeof frcnCookieNotice === 'undefined') {
 			return;
 		}
 
 		requestTrackingIfNeeded();
+		setUpReopenTrigger();
 
 		var banner = document.getElementById('frcn-cookie-notice');
 

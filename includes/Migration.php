@@ -108,7 +108,59 @@ class Migration {
 			$current['enable_cookie_notice'] = true;
 		}
 
+		self::migrate_legacy_gtm_ga4_keys( $legacy_settings, $current );
+
 		update_option( 'frontconsent_settings', $current );
+	}
+
+	/**
+	 * Convert FrontBlocks' retired dedicated `cookie_notice_gtm_id` /
+	 * `cookie_notice_ga4_id` fields into the shared
+	 * `cookie_notice_tracking_integrations` list, which is the only place
+	 * CookieNotice::get_tracking_integrations() actually reads GTM/GA4 ids
+	 * from. Copying those two keys verbatim (as MIGRATED_KEYS does above)
+	 * leaves them dead — this is what makes the migrated tracking ID actually
+	 * load again.
+	 *
+	 * @param array $legacy_settings FrontBlocks' `frontblocks_settings` option value.
+	 * @param array $current         FrontConsent settings being built, passed by reference.
+	 * @return void
+	 */
+	private static function migrate_legacy_gtm_ga4_keys( $legacy_settings, array &$current ) {
+		$legacy = array(
+			'cookie_notice_gtm_id' => 'gtm',
+			'cookie_notice_ga4_id' => 'ga4',
+		);
+
+		$integrations = Frontend\CookieNotice::get_tracking_integrations( $current, true );
+
+		foreach ( $legacy as $option_key => $type ) {
+			$legacy_id = trim( (string) ( $legacy_settings[ $option_key ] ?? '' ) );
+			if ( '' === $legacy_id ) {
+				continue;
+			}
+
+			$already_present = false;
+			foreach ( $integrations as $integration ) {
+				if ( $type === $integration['type'] ) {
+					$already_present = true;
+					break;
+				}
+			}
+
+			if ( ! $already_present ) {
+				$integrations[] = array(
+					'type' => $type,
+					'id'   => sanitize_text_field( $legacy_id ),
+				);
+			}
+		}
+
+		if ( $integrations ) {
+			$current['cookie_notice_tracking_integrations'] = array_values( $integrations );
+		}
+
+		unset( $current['cookie_notice_gtm_id'], $current['cookie_notice_ga4_id'] );
 	}
 
 	/**

@@ -340,6 +340,32 @@ class CookieNotice {
 		if ( ! $this->is_policy_page() ) {
 			$this->render_banner_markup();
 		}
+
+		$this->render_reopen_trigger();
+	}
+
+	/**
+	 * Render the persistent "Cookie preferences" trigger that lets a visitor
+	 * who already decided open the banner again to change their mind — the
+	 * only way to withdraw acceptance or replace a rejection without deleting
+	 * the consent cookie by hand. Always printed (including on the policy
+	 * page, and identically for every visitor of a cached page): JS shows it
+	 * only once a decision cookie actually exists, the same cache-neutral
+	 * approach render_banner_markup() itself uses.
+	 *
+	 * @return void
+	 */
+	private function render_reopen_trigger() {
+		?>
+		<button
+			type="button"
+			id="frcn-cookie-reopen"
+			class="frcn-cookie-reopen"
+			hidden
+		>
+			<?php echo esc_html__( 'Cookie preferences', 'frontconsent' ); ?>
+		</button>
+		<?php
 	}
 
 	/**
@@ -362,7 +388,7 @@ class CookieNotice {
 		$radius         = (string) ( $options['cookie_notice_radius'] ?? 'small' );
 
 		if ( '' === $message ) {
-			$message = __( 'We use cookies to improve your experience on our website. By browsing this website, you agree to our use of cookies.', 'frontconsent' );
+			$message = __( 'We use cookies to improve your experience on our website. Please choose whether to accept or reject them.', 'frontconsent' );
 		}
 
 		if ( '' === $accept_label ) {
@@ -945,8 +971,13 @@ class CookieNotice {
 			// (consumed directly by the inline bootstrap script and the
 			// registered frontconsent-cookie-notice.js fallback), not through
 			// the generic trackingIntegrations dispatch used by add-ons.
-			$response['gtmId']                = $site_kit_tags['gtm'] ? '' : $this->sanitize_gtm_id( $gtm_id );
-			$response['ga4Id']                = $site_kit_tags['ga4'] ? '' : $this->sanitize_ga4_id( $ga4_id );
+			// Only an identical Site Kit ID suppresses the configured one — a
+			// different container/measurement ID must still load, since Site
+			// Kit managing its own tag doesn't mean it's managing this one.
+			$gtm_id                           = $this->sanitize_gtm_id( $gtm_id );
+			$ga4_id                           = $this->sanitize_ga4_id( $ga4_id );
+			$response['gtmId']                = ( '' !== $gtm_id && $gtm_id === $site_kit_tags['gtm'] ) ? '' : $gtm_id;
+			$response['ga4Id']                = ( '' !== $ga4_id && $ga4_id === $site_kit_tags['ga4'] ) ? '' : $ga4_id;
 			$response['trackingIntegrations'] = array_map(
 				function ( $integration ) {
 					$integration['category'] = self::get_integration_default_category( $integration['type'] );
@@ -960,19 +991,22 @@ class CookieNotice {
 	}
 
 	/**
-	 * Get the Google tags that Site Kit is configured to place.
+	 * Get the Google tag IDs that Site Kit is configured to place.
 	 *
 	 * Site Kit may be active without placing a tag. Only suppress the matching
 	 * FrontConsent ID when its Site Kit module has both an identifier and snippet
 	 * placement enabled, avoiding duplicated tags without disabling tracking on
-	 * partially configured Site Kit installations.
+	 * partially configured Site Kit installations. Returning the actual ID
+	 * (rather than a bare bool) is what lets the caller suppress only the
+	 * identical container/measurement ID — a different one configured in
+	 * FrontConsent must still load.
 	 *
-	 * @return array{gtm: bool, ga4: bool}
+	 * @return array{gtm: string, ga4: string}
 	 */
 	private function get_google_site_kit_managed_tags() {
 		$tags = array(
-			'gtm' => false,
-			'ga4' => false,
+			'gtm' => '',
+			'ga4' => '',
 		);
 
 		if ( ! defined( 'GOOGLESITEKIT_VERSION' ) && ! class_exists( '\\Google\\Site_Kit\\Plugin' ) ) {
@@ -981,12 +1015,12 @@ class CookieNotice {
 
 		$tag_manager_settings = get_option( 'googlesitekit_tagmanager_settings', array() );
 		if ( is_array( $tag_manager_settings ) && ! empty( $tag_manager_settings['containerID'] ) && ( ! isset( $tag_manager_settings['useSnippet'] ) || $tag_manager_settings['useSnippet'] ) ) {
-			$tags['gtm'] = true;
+			$tags['gtm'] = strtoupper( (string) $tag_manager_settings['containerID'] );
 		}
 
 		$analytics_settings = get_option( 'googlesitekit_analytics-4_settings', array() );
 		if ( is_array( $analytics_settings ) && ! empty( $analytics_settings['measurementID'] ) && ( ! isset( $analytics_settings['useSnippet'] ) || $analytics_settings['useSnippet'] ) ) {
-			$tags['ga4'] = true;
+			$tags['ga4'] = strtoupper( (string) $analytics_settings['measurementID'] );
 		}
 
 		return $tags;

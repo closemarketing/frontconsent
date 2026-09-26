@@ -139,4 +139,38 @@ class CookieNoticeConfigCallbackTest extends TestCase {
 
 		delete_option( 'googlesitekit_tagmanager_settings' );
 	}
+
+	/**
+	 * Site Kit managing a different GTM container must not suppress a
+	 * distinct one the admin configured in FrontConsent — only an identical
+	 * ID is a duplicate.
+	 */
+	public function test_gtm_id_still_loads_when_site_kit_manages_a_different_container() {
+		if ( ! defined( 'GOOGLESITEKIT_VERSION' ) ) {
+			define( 'GOOGLESITEKIT_VERSION', '1.0.0' );
+		}
+
+		update_option(
+			'frontconsent_settings',
+			array(
+				'enable_cookie_notice'                => true,
+				'cookie_notice_tracking_integrations' => array(
+					array( 'type' => 'gtm', 'id' => 'GTM-ABC1234' ),
+				),
+			)
+		);
+		update_option(
+			'googlesitekit_tagmanager_settings',
+			array(
+				'containerID' => 'GTM-DIFFERENT9',
+				'useSnippet'  => true,
+			)
+		);
+
+		$response = $this->get_config();
+
+		$this->assertSame( 'GTM-ABC1234', $response['data']['gtmId'] );
+
+		delete_option( 'googlesitekit_tagmanager_settings' );
+	}
 }
