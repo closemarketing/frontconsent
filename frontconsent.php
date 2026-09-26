@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: FrontConsent
- * Plugin URI:  https://wordpress.org/plugins/front-consent/
+ * Plugin URI:  https://wordpress.org/plugins/frontconsent/
  * Description: GDPR/ePrivacy-compliant cookie consent banner for WordPress, following the AEPD guide. Configurable banner, Google Consent Mode v2, and tracking integrations that only load after consent.
  * Version:     1.0.0
  * Author:      CloseTechnology
