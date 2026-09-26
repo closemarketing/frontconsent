@@ -143,4 +143,27 @@ class MigrationTest extends TestCase {
 		delete_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED );
 		delete_option( 'frontblocks_cookie_notice_accepted_count' );
 	}
+
+	/**
+	 * migrate_stats() must add the legacy count to whatever is already in
+	 * FrontConsent's own counter (e.g. a decision logged by a concurrent
+	 * visitor between migration's read and write) via an atomic SQL
+	 * UPDATE, not a get_option()/update_option() round trip that could
+	 * overwrite that concurrent write.
+	 */
+	public function test_migration_adds_legacy_stats_to_an_existing_counter_atomically() {
+		update_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED, 3, false );
+		update_option(
+			'frontblocks_settings',
+			array( 'enable_cookie_notice' => true )
+		);
+		update_option( 'frontblocks_cookie_notice_accepted_count', 7 );
+
+		Migration::maybe_run();
+
+		$this->assertSame( 10, (int) get_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED ) );
+
+		delete_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED );
+		delete_option( 'frontblocks_cookie_notice_accepted_count' );
+	}
 }

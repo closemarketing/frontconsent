@@ -332,13 +332,20 @@
 		revealBanner();
 
 		if (acceptBtn) {
-			acceptBtn.addEventListener('click', function () {
+			// preventDefault() is what stops the button's form="..." submit
+			// attribute (the no-JS fallback — see render_banner_markup() and
+			// log_consent_form_callback()) from actually navigating the page
+			// away when JavaScript can run: this handles the decision instead,
+			// entirely client-side.
+			acceptBtn.addEventListener('click', function (event) {
+				event.preventDefault();
 				handleDecision('accepted');
 			});
 		}
 
 		if (rejectBtn) {
-			rejectBtn.addEventListener('click', function () {
+			rejectBtn.addEventListener('click', function (event) {
+				event.preventDefault();
 				handleDecision('rejected');
 			});
 		}

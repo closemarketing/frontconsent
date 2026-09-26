@@ -97,8 +97,9 @@ class Migration {
 	 * @return void
 	 */
 	private static function migrate_settings( $legacy_settings ) {
-		$current = get_option( 'frontconsent_settings', array() );
-		$current = is_array( $current ) ? $current : array();
+		$previous = get_option( 'frontconsent_settings', array() );
+		$previous = is_array( $previous ) ? $previous : array();
+		$current  = $previous;
 
 		foreach ( self::MIGRATED_KEYS as $key ) {
 			if ( array_key_exists( $key, $legacy_settings ) && ! array_key_exists( $key, $current ) ) {
@@ -115,6 +116,15 @@ class Migration {
 		self::migrate_legacy_gtm_ga4_keys( $legacy_settings, $current );
 
 		update_option( 'frontconsent_settings', $current );
+
+		// This runs before Frontend\CookieNotice is ever constructed (see
+		// Plugin_Main::init()), so its own update_option_frontconsent_settings/
+		// add_option_frontconsent_settings hooks aren't registered yet to catch
+		// the write above — call the same cache-purge logic directly instead of
+		// depending on hook registration order.
+		if ( Frontend\CookieNotice::settings_changed( $previous, $current ) ) {
+			Frontend\CookieNotice::handle_settings_changed( $previous, $current );
+		}
 	}
 
 	/**
@@ -178,14 +188,48 @@ class Migration {
 		$legacy_rejected = (int) get_option( 'frontblocks_cookie_notice_rejected_count', 0 );
 
 		if ( $legacy_accepted > 0 ) {
-			$current = (int) get_option( Frontend\CookieNotice::STATS_OPTION_ACCEPTED, 0 );
-			update_option( Frontend\CookieNotice::STATS_OPTION_ACCEPTED, $current + $legacy_accepted, false );
+			self::add_to_stat_atomically( Frontend\CookieNotice::STATS_OPTION_ACCEPTED, $legacy_accepted );
 		}
 
 		if ( $legacy_rejected > 0 ) {
-			$current = (int) get_option( Frontend\CookieNotice::STATS_OPTION_REJECTED, 0 );
-			update_option( Frontend\CookieNotice::STATS_OPTION_REJECTED, $current + $legacy_rejected, false );
+			self::add_to_stat_atomically( Frontend\CookieNotice::STATS_OPTION_REJECTED, $legacy_rejected );
 		}
+	}
+
+	/**
+	 * Add an amount to an integer stat option directly in the database.
+	 *
+	 * A plain get_option()/update_option() round trip (the guard added in
+	 * maybe_run() only serializes which request runs the migration, not
+	 * concurrent writes to this same counter from a visitor's own decision
+	 * being logged at the same moment via CookieNotice::log_consent_callback())
+	 * would let this migration's addition silently overwrite a decision
+	 * logged in between the read and the write. A single
+	 * UPDATE ... SET value = value + N lets the database serialize the two
+	 * instead — the same technique CookieNotice::increment_option_atomically()
+	 * already uses for a plain +1.
+	 *
+	 * @param string $option_name Option name storing a plain integer.
+	 * @param int    $amount      Amount to add.
+	 * @return void
+	 */
+	private static function add_to_stat_atomically( $option_name, $amount ) {
+		global $wpdb;
+
+		$sql = $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = option_value + %d WHERE option_name = %s", $amount, $option_name );
+
+		$updated = $wpdb->query( $sql );
+
+		if ( ! $updated ) {
+			// Counter doesn't exist yet. add_option() returns false if another
+			// request created the row first — in that case fall back to the
+			// atomic UPDATE so this addition isn't silently dropped.
+			if ( ! add_option( $option_name, $amount, '', 'no' ) ) {
+				$wpdb->query( $sql );
+			}
+		}
+
+		wp_cache_delete( $option_name, 'options' );
 	}
 
 	/**

@@ -114,7 +114,7 @@ test('does not load ChatGPT Ads before consent and loads it after acceptance', a
 	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(environment.scripts.length, 0);
 	assert.equal(environment.fetchCalls(), 0);
-	environment.actionListeners.accept.click();
+	environment.actionListeners.accept.click({ preventDefault() {} });
 	await new Promise((resolve) => setImmediate(resolve));
 	await new Promise((resolve) => setImmediate(resolve));
 
@@ -206,7 +206,7 @@ test('does not initialize ChatGPT Ads when marketing consent is denied', () => {
 test('does not load ChatGPT Ads after explicit rejection', async () => {
 	const environment = createEnvironment();
 
-	environment.actionListeners.reject.click();
+	environment.actionListeners.reject.click({ preventDefault() {} });
 	await new Promise((resolve) => setImmediate(resolve));
 	await new Promise((resolve) => setImmediate(resolve));
 
@@ -255,7 +255,7 @@ test('reopen trigger on the policy page navigates home instead of reloading in p
 test('accepting sends the consent update through gtag(), not a raw dataLayer push', async () => {
 	const environment = createEnvironment();
 
-	environment.actionListeners.accept.click();
+	environment.actionListeners.accept.click({ preventDefault() {} });
 	await new Promise((resolve) => setImmediate(resolve));
 
 	assert.equal(typeof environment.window.gtag, 'function');
@@ -280,7 +280,7 @@ test('reopen trigger is revealed immediately after an in-page decision, without 
 
 	assert.equal(environment.reopenBtn.hidden, true);
 
-	environment.actionListeners.accept.click();
+	environment.actionListeners.accept.click({ preventDefault() {} });
 	await new Promise((resolve) => setImmediate(resolve));
 
 	assert.equal(environment.reopenBtn.hidden, false);

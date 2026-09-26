@@ -90,6 +90,13 @@ class CookieNotice {
 		add_action( 'wp_ajax_nopriv_frcn_get_cookie_notice_config', array( $this, 'get_config_callback' ) );
 		add_action( 'wp_ajax_frcn_get_cookie_notice_log_nonce', array( $this, 'get_log_nonce_callback' ) );
 		add_action( 'wp_ajax_nopriv_frcn_get_cookie_notice_log_nonce', array( $this, 'get_log_nonce_callback' ) );
+
+		// The no-JS <form> fallback (see render_banner_markup()) submits here
+		// directly, bypassing AJAX entirely — JS intercepts the same buttons'
+		// click events and never lets this form actually submit when it can
+		// run, so this handler only ever runs for a visitor without JavaScript.
+		add_action( 'admin_post_frcn_log_cookie_decision', array( $this, 'log_consent_form_callback' ) );
+		add_action( 'admin_post_nopriv_frcn_log_cookie_decision', array( $this, 'log_consent_form_callback' ) );
 	}
 
 	/**
@@ -101,11 +108,11 @@ class CookieNotice {
 	 * @return void
 	 */
 	public function handle_frontconsent_settings_updated( $old_value, $new_value, $option_name ) {
-		if ( 'frontconsent_settings' !== $option_name || ! is_array( $old_value ) || ! is_array( $new_value ) || ! $this->settings_changed( $old_value, $new_value ) ) {
+		if ( 'frontconsent_settings' !== $option_name || ! is_array( $old_value ) || ! is_array( $new_value ) || ! self::settings_changed( $old_value, $new_value ) ) {
 			return;
 		}
 
-		$this->handle_settings_changed( $old_value, $new_value );
+		self::handle_settings_changed( $old_value, $new_value );
 	}
 
 	/**
@@ -116,21 +123,27 @@ class CookieNotice {
 	 * @return void
 	 */
 	public function handle_frontconsent_settings_added( $option_name, $new_value ) {
-		if ( ! is_array( $new_value ) || ! $this->settings_changed( array(), $new_value ) ) {
+		if ( ! is_array( $new_value ) || ! self::settings_changed( array(), $new_value ) ) {
 			return;
 		}
 
-		$this->handle_settings_changed( array(), $new_value );
+		self::handle_settings_changed( array(), $new_value );
 	}
 
 	/**
 	 * Invalidate page caches after Cookie Notice settings change.
 	 *
+	 * Public static — Migration calls this directly right after its own
+	 * first write to 'frontconsent_settings', since that write happens
+	 * before this class is even constructed (and its
+	 * update_option_frontconsent_settings/add_option_frontconsent_settings
+	 * hooks registered), so the generic option hooks alone would miss it.
+	 *
 	 * @param array $old_options Previous settings.
 	 * @param array $new_options New settings.
 	 * @return void
 	 */
-	private function handle_settings_changed( $old_options, $new_options ) {
+	public static function handle_settings_changed( $old_options, $new_options ) {
 		$cache_was_purged = false;
 
 		if ( function_exists( 'rocket_clean_domain' ) ) {
@@ -161,7 +174,7 @@ class CookieNotice {
 	 * @param array $new_options New settings.
 	 * @return bool
 	 */
-	private function settings_changed( $old_options, $new_options ) {
+	public static function settings_changed( $old_options, $new_options ) {
 		$defaults = array(
 			'enable_cookie_notice'                => false,
 			'cookie_notice_message'               => '',
@@ -239,6 +252,22 @@ class CookieNotice {
 		$port   = isset( $home_parts['port'] ) ? ':' . $home_parts['port'] : '';
 
 		return $scheme . '://' . $host . $port . $ajax_path;
+	}
+
+	/**
+	 * Get the visitor's current page URL, for the no-JS <form> fallback's
+	 * redirect-back-here field. wp_validate_redirect() (checked before it's
+	 * ever used to actually redirect, in log_consent_form_callback()) is
+	 * what makes an untrusted, visitor-controlled value here safe.
+	 *
+	 * @return string
+	 */
+	private function get_current_url() {
+		$host   = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : wp_parse_url( home_url(), PHP_URL_HOST );
+		$uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+		$scheme = is_ssl() ? 'https' : 'http';
+
+		return $scheme . '://' . $host . $uri;
 	}
 
 	/**
@@ -320,7 +349,14 @@ class CookieNotice {
 			array(
 				'ajaxUrl'        => $this->get_ajax_url(),
 				'cookieName'     => $this->get_cookie_name(),
-				'cookiePath'     => defined( 'COOKIEPATH' ) && COOKIEPATH ? COOKIEPATH : '/',
+				// Always '/', not COOKIEPATH: COOKIEPATH is derived from the
+				// Home URL's own path, but this cookie must also be sent to
+				// the admin-ajax.php request in get_ajax_url(), which lives
+				// under the Site URL's path — on an install where Home URL
+				// and Site URL have different paths, COOKIEPATH would scope
+				// the cookie to a path admin-ajax.php falls outside of, and
+				// the browser would silently omit it from that request.
+				'cookiePath'     => '/',
 				'expirationDays' => $days > 0 ? $days : 365,
 				// The reopen trigger's banner never renders on the policy page
 				// (see render_banner()) — reloading in place there would leave
@@ -484,14 +520,20 @@ class CookieNotice {
 					do_action( 'frcn_cookie_notice_before_actions', $options );
 					?>
 					<button
-						type="button"
+						type="submit"
+						form="frcn-cookie-notice-form"
+						name="frcn_decision"
+						value="rejected"
 						class="frcn-cookie-notice__button frcn-cookie-notice__button--reject"
 						data-frcn-cookie-action="reject"
 					>
 						<?php echo esc_html( $reject_label ); ?>
 					</button>
 					<button
-						type="button"
+						type="submit"
+						form="frcn-cookie-notice-form"
+						name="frcn_decision"
+						value="accepted"
 						class="frcn-cookie-notice__button frcn-cookie-notice__button--accept"
 						data-frcn-cookie-action="accept"
 					>
@@ -500,6 +542,22 @@ class CookieNotice {
 				</div>
 			</div>
 		</div>
+		<?php
+		// A real <form>, outside the banner markup above (a <form> can't be a
+		// descendant of the buttons that reference it via the form="..."
+		// attribute, but it can be a sibling), submitting to admin-post.php —
+		// this is what makes Accept/Reject actually work without JavaScript:
+		// JS intercepts the buttons' click events and never lets this form
+		// submit in the first place (see frontconsent-cookie-notice.js), but a
+		// no-JS visitor's click submits it for real, and
+		// log_consent_form_submission() sets the same consent cookie
+		// server-side and redirects back to this page.
+		?>
+		<form id="frcn-cookie-notice-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="frcn_log_cookie_decision" />
+			<input type="hidden" name="frcn_redirect" value="<?php echo esc_url( $this->get_current_url() ); ?>" />
+			<?php wp_nonce_field( self::NONCE_ACTION, 'frcn_nonce', false ); ?>
+		</form>
 		<?php
 		// Without JS, nothing would ever remove '--init' (see the class list
 		// above), so the banner would stay invisible forever — this resets it
@@ -1120,6 +1178,68 @@ class CookieNotice {
 		$this->maybe_increment_stat( $decision );
 
 		wp_send_json_success();
+	}
+
+	/**
+	 * Admin-post.php callback: the no-JS <form> fallback (see
+	 * render_banner_markup()) submits here directly. Sets the same consent
+	 * cookie server-side (setcookie(), since there is no client-side JS to
+	 * do it via document.cookie here), logs the decision the same way
+	 * log_consent_callback() does, then redirects back to the page the
+	 * visitor was on.
+	 *
+	 * @return void
+	 */
+	public function log_consent_form_callback() {
+		$redirect = $this->process_consent_form_submission();
+
+		wp_safe_redirect( $redirect );
+		exit;
+	}
+
+	/**
+	 * Validate the no-JS <form> submission, set the consent cookie and log
+	 * the decision if valid, and return the redirect target — split out from
+	 * log_consent_form_callback() so the validation/cookie-setting logic is
+	 * directly testable without the process-terminating exit() around it.
+	 *
+	 * @return string Validated redirect URL.
+	 */
+	public function process_consent_form_submission() {
+		$redirect = isset( $_POST['frcn_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['frcn_redirect'] ) ) : home_url( '/' );
+		$redirect = wp_validate_redirect( $redirect, home_url( '/' ) );
+
+		$nonce = isset( $_POST['frcn_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['frcn_nonce'] ) ) : '';
+
+		if ( ! $this->is_enabled() || ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+			return $redirect;
+		}
+
+		$decision = isset( $_POST['frcn_decision'] ) ? sanitize_key( wp_unslash( $_POST['frcn_decision'] ) ) : '';
+
+		if ( in_array( $decision, array( 'accepted', 'rejected' ), true ) ) {
+			$days = (int) ( get_option( 'frontconsent_settings', array() )['cookie_notice_expiration_days'] ?? 365 );
+			$days = $days > 0 ? $days : 365;
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- admin-post.php runs this before any output in production; suppressed only so process_consent_form_submission() stays directly unit-testable outside that request lifecycle, where headers are already sent by the test bootstrap itself.
+			@setcookie(
+				$this->get_cookie_name(),
+				$decision,
+				array(
+					'expires'  => time() + ( $days * DAY_IN_SECONDS ),
+					// Always '/' — see the matching comment in enqueue_assets()
+					// for why COOKIEPATH isn't used here either.
+					'path'     => '/',
+					'secure'   => is_ssl(),
+					'httponly' => false,
+					'samesite' => 'Lax',
+				)
+			);
+
+			$this->maybe_increment_stat( $decision );
+		}
+
+		return $redirect;
 	}
 
 	/**

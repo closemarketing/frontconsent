@@ -206,4 +206,27 @@ class CookieNoticePolicyPageTest extends TestCase {
 
 		$this->assertNotSame( 1, $in_footer );
 	}
+
+	/**
+	 * The localized cookiePath must always be '/', never COOKIEPATH — on an
+	 * install where the Home URL and Site URL have different paths,
+	 * COOKIEPATH (derived from the Home URL) would scope the cookie to a
+	 * path the admin-ajax.php request in get_ajax_url() (under the Site
+	 * URL's path) falls outside of, so the browser would omit it from that
+	 * request and configured tracking would never load after consent.
+	 */
+	public function test_localized_cookie_path_is_always_root() {
+		if ( ! defined( 'COOKIEPATH' ) ) {
+			define( 'COOKIEPATH', '/some/other/path/' );
+		}
+
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$this->cookie_notice->enqueue_assets();
+
+		$data = wp_scripts()->get_data( 'frontconsent-cookie-notice', 'data' );
+
+		$this->assertStringContainsString( '"cookiePath":"/"', $data );
+	}
 }

@@ -51,6 +51,16 @@ add_action(
  * @return void
  */
 function frcn_plugin_activation_redirect() {
+	// admin_init also fires on admin AJAX requests (e.g. Heartbeat) that can
+	// reach the server between activation and the browser's next real admin
+	// page load — bail without touching or consuming the flag there, so the
+	// activating administrator still gets redirected on that next real page
+	// load instead of the flag being silently claimed by an AJAX request
+	// that can't act on a redirect at all.
+	if ( wp_doing_ajax() ) {
+		return;
+	}
+
 	// Bail if activating from network or bulk activation — but the flag was
 	// already set by register_activation_hook() regardless (it fires on
 	// every activation, bulk included), so it must still be cleared here.

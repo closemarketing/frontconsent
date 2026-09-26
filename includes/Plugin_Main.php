@@ -64,16 +64,19 @@ class Plugin_Main {
 			require_once FRCN_PLUGIN_PATH . 'includes/Migration.php';
 		}
 
-		// Instantiated before Migration::maybe_run(): its constructor registers
-		// the update_option_frontconsent_settings/add_option_frontconsent_settings
-		// hooks that purge full-page caches and fire frcn_cookie_notice_settings_updated
-		// — those must already be registered when migration writes the option
-		// for the very first time, on the first request after activation, or
-		// a cache that doesn't independently purge on plugin activation would
-		// keep serving stale, pre-migration banner HTML until it expires.
-		new Frontend\CookieNotice();
-
+		// Migration must run before CookieNotice is constructed: its
+		// constructor reads is_enabled() once, synchronously, to decide
+		// whether to register the frontend hooks (wp_head, wp_footer, etc.)
+		// at all — on the very first request after activation, constructing
+		// it first would see the pre-migration (disabled) state and skip
+		// those hooks for that entire request, even though migration enables
+		// Cookie Notice a moment later. Migration itself calls
+		// CookieNotice::handle_settings_changed() directly for its own write,
+		// so the cache-purge/frcn_cookie_notice_settings_updated side of this
+		// doesn't depend on CookieNotice's hooks being registered yet either.
 		Migration::maybe_run();
+
+		new Frontend\CookieNotice();
 
 		$this->load_modules();
 	}
