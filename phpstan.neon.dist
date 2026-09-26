@@ -1,0 +1,10 @@
+parameters:
+    level: 1
+    paths:
+        - frontconsent.php
+        - includes
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    excludePaths:
+        - vendor/
+        - node_modules (?)

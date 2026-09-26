@@ -681,7 +681,7 @@ class Settings {
 		}
 
 		$current_options = get_option( self::OPTION_NAME, array() );
-		$sanitized        = $current_options;
+		$sanitized       = $current_options;
 
 		// Unchecked checkboxes are not submitted at all.
 		$sanitized['enable_cookie_notice'] = ! empty( $value['enable_cookie_notice'] );
