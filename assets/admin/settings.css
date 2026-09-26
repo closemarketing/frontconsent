@@ -1,0 +1,251 @@
+/**
+ * FrontConsent Settings Page Styles
+ *
+ * @package FrontConsent
+ * @version 1.0.0
+ */
+
+.frcn-settings-wrapper .frcn-field-row--toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 16px;
+	max-width: 640px;
+}
+
+.frcn-settings-wrapper .frcn-toggle-label {
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.frcn-settings-wrapper .frcn-toggle {
+	position: relative;
+	display: inline-block;
+	width: 42px;
+	height: 24px;
+}
+
+.frcn-settings-wrapper .frcn-toggle input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.frcn-settings-wrapper .frcn-toggle span {
+	position: absolute;
+	inset: 0;
+	background-color: #ccc;
+	border-radius: 999px;
+	transition: background-color 0.2s ease;
+	cursor: pointer;
+}
+
+.frcn-settings-wrapper .frcn-toggle span::before {
+	content: "";
+	position: absolute;
+	width: 18px;
+	height: 18px;
+	left: 3px;
+	top: 3px;
+	background-color: #fff;
+	border-radius: 50%;
+	transition: transform 0.2s ease;
+}
+
+.frcn-settings-wrapper .frcn-toggle input:checked + span {
+	background-color: #687df9;
+}
+
+.frcn-settings-wrapper .frcn-toggle input:checked + span::before {
+	transform: translateX(18px);
+}
+
+.frcn-settings-wrapper .frcn-panel {
+	max-width: 640px;
+	padding: 16px;
+	background-color: #f9fafb;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	margin-bottom: 16px;
+}
+
+.frcn-settings-wrapper .frcn-stats-row {
+	display: flex;
+	gap: 16px;
+	max-width: 640px;
+	margin-bottom: 16px;
+	padding: 16px;
+	background-color: #f9fafb;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+}
+
+.frcn-settings-wrapper .frcn-stat {
+	flex: 1;
+}
+
+.frcn-settings-wrapper .frcn-stat__label {
+	font-size: 12px;
+	color: #6b7280;
+	margin: 0 0 4px;
+}
+
+.frcn-settings-wrapper .frcn-stat__value {
+	font-size: 24px;
+	font-weight: 700;
+	margin: 0;
+}
+
+.frcn-settings-wrapper .frcn-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	color: #374151;
+	margin-bottom: 8px;
+}
+
+.frcn-settings-wrapper .frcn-label--mt {
+	margin-top: 16px;
+}
+
+.frcn-settings-wrapper .frcn-hint {
+	font-size: 12px;
+	color: #6b7280;
+	margin-top: 8px;
+}
+
+.frcn-settings-wrapper .frcn-hint--warn {
+	color: #b45309;
+}
+
+.frcn-settings-wrapper .frcn-input {
+	display: block;
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	font-size: 14px;
+}
+
+.frcn-settings-wrapper .frcn-input--narrow {
+	width: 120px;
+}
+
+.frcn-settings-wrapper .frcn-mono {
+	font-family: monospace;
+	font-size: 12px;
+}
+
+.frcn-settings-wrapper .frcn-color-input {
+	height: 40px;
+	width: 100%;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+}
+
+.frcn-settings-wrapper .frcn-grid-2,
+.frcn-settings-wrapper .frcn-grid-3 {
+	display: grid;
+	gap: 16px;
+	margin-top: 16px;
+}
+
+.frcn-settings-wrapper .frcn-grid-2 {
+	grid-template-columns: repeat(2, 1fr);
+}
+
+.frcn-settings-wrapper .frcn-grid-3 {
+	grid-template-columns: repeat(3, 1fr);
+}
+
+.frcn-settings-wrapper .frcn-grid--mt {
+	margin-top: 16px;
+}
+
+.frcn-settings-wrapper .frcn-alert {
+	margin-bottom: 16px;
+	padding: 16px;
+	background-color: #fffbeb;
+	border: 1px solid #fde68a;
+	border-radius: 8px;
+}
+
+.frcn-settings-wrapper .frcn-alert__title {
+	font-size: 13px;
+	font-weight: 600;
+	color: #92400e;
+	margin: 0 0 8px;
+}
+
+.frcn-settings-wrapper .frcn-alert__body {
+	font-size: 13px;
+	color: #92400e;
+	margin: 0;
+}
+
+.frcn-settings-wrapper .frcn-integration-list {
+	list-style: none;
+	margin: 0 0 16px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.frcn-settings-wrapper .frcn-integration-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 10px 12px;
+	background-color: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.frcn-settings-wrapper .frcn-remove {
+	font-size: 12px;
+	color: #b91c1c;
+	white-space: nowrap;
+}
+
+.frcn-cookie-notice-preview-stage {
+	position: relative;
+	min-height: 180px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 12px;
+	background-color: #eef2ff;
+	border-radius: 8px;
+}
+
+.frcn-cookie-notice-preview {
+	position: static !important;
+	inset: auto !important;
+	left: auto !important;
+	right: auto !important;
+	bottom: auto !important;
+	top: auto !important;
+	max-width: 100%;
+	width: auto !important;
+}
+
+.frcn-cookie-notice-preview.frcn-cookie-notice--bar {
+	max-width: 480px;
+}
+
+.frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--right {
+	margin-left: auto;
+	margin-right: 0;
+}
+
+.frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--left {
+	margin-right: auto;
+	margin-left: 0;
+}
+
+.frcn-cookie-notice-preview .frcn-cookie-notice__panel {
+	max-height: none;
+}

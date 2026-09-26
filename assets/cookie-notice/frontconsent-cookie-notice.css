@@ -1,0 +1,282 @@
+/**
+ * FrontConsent Cookie Notice Styles
+ *
+ * @package FrontConsent
+ * @version 1.0.0
+ */
+
+.frcn-cookie-notice {
+	--frcn-cookie-accent: #687df9;
+	--frcn-cookie-accent-contrast: #ffffff;
+	--frcn-cookie-accent-on-light: #687df9;
+	--frcn-cookie-bg: #ffffff;
+	--frcn-cookie-text: #1f2937;
+	--frcn-cookie-radius: 12px;
+
+	position: fixed;
+	z-index: 999999;
+	box-sizing: border-box;
+	font-family: inherit;
+	line-height: 1.5;
+	opacity: 1;
+	transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.frcn-cookie-notice * {
+	box-sizing: border-box;
+}
+
+.frcn-cookie-notice--hidden {
+	opacity: 0;
+	pointer-events: none;
+}
+
+/*
+ * Initial, pre-decision state: printed by the server this way so a visitor
+ * who already accepted/rejected never sees the banner flash into view before
+ * frontblocks-cookie-notice.js hides it — the invisible state is the default,
+ * not something applied after the fact. It doubles as the "from" state of the
+ * entrance animation for a visitor who still needs to decide: the script
+ * removes this class once it determines that, letting the transition above
+ * animate it in. A `<noscript>` rule further down resets it to visible for
+ * browsers that never run the script at all.
+ */
+.frcn-cookie-notice--init {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.frcn-cookie-notice--bar.frcn-cookie-notice--init {
+	transform: translateY(100%);
+}
+
+.frcn-cookie-notice--box.frcn-cookie-notice--init {
+	transform: translateX(100%);
+}
+
+.frcn-cookie-notice--box.frcn-cookie-notice--left.frcn-cookie-notice--init {
+	transform: translateX(-100%);
+}
+
+.frcn-cookie-notice--popup.frcn-cookie-notice--init {
+	transform: scale(0.96);
+}
+
+.frcn-cookie-notice__panel {
+	background-color: var(--frcn-cookie-bg);
+	color: var(--frcn-cookie-text);
+	border-radius: var(--frcn-cookie-radius);
+	overflow: hidden;
+	box-shadow: none;
+}
+
+.frcn-cookie-notice__message {
+	margin: 0;
+	font-size: 14px;
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-notice__link {
+	color: var(--frcn-cookie-accent-on-light);
+	text-decoration: underline;
+	white-space: nowrap;
+}
+
+.frcn-cookie-notice__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	flex-shrink: 0;
+}
+
+.frcn-cookie-notice__button {
+	appearance: none;
+	border-radius: 6px;
+	padding: 10px 20px;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.2;
+	cursor: pointer;
+	transition: filter 0.15s ease, transform 0.15s ease;
+	white-space: nowrap;
+}
+
+.frcn-cookie-notice__button:hover {
+	filter: brightness(0.92);
+}
+
+.frcn-cookie-notice__button:active {
+	transform: scale(0.97);
+}
+
+.frcn-cookie-notice__button:focus-visible {
+	outline: 2px solid var(--frcn-cookie-accent-on-light);
+	outline-offset: 2px;
+}
+
+.frcn-cookie-notice__button--accept {
+	background-color: var(--frcn-cookie-accent);
+	border: 1px solid var(--frcn-cookie-accent);
+	color: var(--frcn-cookie-accent-contrast);
+}
+
+.frcn-cookie-notice__button--reject {
+	background-color: transparent;
+	border: 1px solid #9ca3af;
+	color: var(--frcn-cookie-text);
+}
+
+/* Bar layout: floating bottom bar, spanning most of the viewport width. */
+.frcn-cookie-notice--bar {
+	left: 20px;
+	right: 20px;
+	bottom: 20px;
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+}
+
+/* GeneratePress sets the content width in PHP, so match its centered page
+   container when FrontBlocks receives that value from the active theme. */
+.frcn-cookie-notice--bar.frcn-cookie-notice--generatepress {
+	left: max(20px, calc((100vw - var(--frcn-cookie-content-width)) / 2));
+	right: max(20px, calc((100vw - var(--frcn-cookie-content-width)) / 2));
+}
+
+.frcn-cookie-notice--bar .frcn-cookie-notice__panel {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	padding: 16px 24px;
+}
+
+.frcn-cookie-notice--bar .frcn-cookie-notice__message {
+	flex: 1 1 320px;
+}
+
+/* Box layout: boxed panel anchored bottom-left or bottom-right. */
+.frcn-cookie-notice--box {
+	bottom: 20px;
+	max-width: 380px;
+	width: calc(100% - 40px);
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+}
+
+.frcn-cookie-notice--box.frcn-cookie-notice--right {
+	right: 20px;
+}
+
+.frcn-cookie-notice--box.frcn-cookie-notice--left {
+	left: 20px;
+}
+
+.frcn-cookie-notice--box .frcn-cookie-notice__panel {
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.frcn-cookie-notice--box .frcn-cookie-notice__actions {
+	flex-direction: column;
+}
+
+.frcn-cookie-notice--box .frcn-cookie-notice__button {
+	width: 100%;
+	text-align: center;
+}
+
+/* Popup layout: centered modal with a dimmed backdrop. */
+.frcn-cookie-notice--popup {
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	overflow-y: auto;
+	background-color: transparent;
+}
+
+.frcn-cookie-notice--popup .frcn-cookie-notice__panel {
+	padding: 40px 32px 32px;
+	max-width: 420px;
+	width: 100%;
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 16px;
+	box-shadow: none;
+}
+
+.frcn-cookie-notice__icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 64px;
+	height: 64px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background-color: var(--frcn-cookie-accent);
+	color: var(--frcn-cookie-accent-contrast);
+}
+
+.frcn-cookie-notice__icon svg {
+	width: 32px;
+	height: 32px;
+}
+
+.frcn-cookie-notice--popup .frcn-cookie-notice__actions {
+	justify-content: center;
+	width: 100%;
+}
+
+body.frcn-cookie-notice-lock-scroll {
+	overflow: hidden;
+}
+
+@media (max-width: 600px) {
+	.frcn-cookie-notice--bar .frcn-cookie-notice__panel {
+		padding: 16px;
+	}
+
+	.frcn-cookie-notice--bar .frcn-cookie-notice__actions,
+	.frcn-cookie-notice--popup .frcn-cookie-notice__actions {
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.frcn-cookie-notice--bar .frcn-cookie-notice__button,
+	.frcn-cookie-notice--popup .frcn-cookie-notice__button {
+		width: 100%;
+		text-align: center;
+	}
+
+	.frcn-cookie-notice--box,
+	.frcn-cookie-notice--popup .frcn-cookie-notice__panel {
+		width: calc(100% - 24px);
+		max-width: none;
+	}
+
+	.frcn-cookie-notice--popup .frcn-cookie-notice__panel {
+		max-height: calc(100vh - 24px);
+	}
+
+	.frcn-cookie-notice--box,
+	.frcn-cookie-notice--bar {
+		left: 12px;
+		right: 12px;
+		bottom: 12px;
+		max-height: calc(100vh - 24px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.frcn-cookie-notice {
+		transition: none;
+	}
+}
