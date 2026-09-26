@@ -254,7 +254,12 @@
 		reopenBtn.hidden = false;
 		reopenBtn.addEventListener('click', function () {
 			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
-			window.location.reload();
+
+			if (frcnCookieNotice.isPolicyPage && frcnCookieNotice.homeUrl) {
+				window.location.href = frcnCookieNotice.homeUrl;
+			} else {
+				window.location.reload();
+			}
 		});
 	}
 
@@ -390,12 +395,15 @@
 			var granted = decision === 'accepted' ? 'granted' : 'denied';
 
 			window.dataLayer = window.dataLayer || [];
-			window.dataLayer.push(['consent', 'update', {
+			window.gtag = window.gtag || function () {
+				window.dataLayer.push(arguments);
+			};
+			window.gtag('consent', 'update', {
 				ad_storage: granted,
 				ad_user_data: granted,
 				ad_personalization: granted,
 				analytics_storage: granted
-			}]);
+			});
 		}
 
 		function setConsentCookie(decision) {

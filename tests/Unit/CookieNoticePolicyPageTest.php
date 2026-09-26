@@ -153,4 +153,39 @@ class CookieNoticePolicyPageTest extends TestCase {
 			$html
 		);
 	}
+
+	/**
+	 * On the configured policy page, the reopen trigger must localize
+	 * isPolicyPage=true and the home URL — otherwise clicking it there would
+	 * clear the decision cookie and reload straight back onto a page where
+	 * the banner never renders, leaving the visitor with no controls at all.
+	 */
+	public function test_localized_script_data_flags_the_policy_page_and_provides_a_home_url() {
+		$this->go_to( get_permalink( $this->policy_page_id ) );
+
+		$this->cookie_notice->enqueue_assets();
+
+		$data = wp_scripts()->get_data( 'frontconsent-cookie-notice', 'data' );
+
+		// wp_localize_script() casts every value to a string — true becomes
+		// "1", so this asserts the JS-truthy form actually sent to the page,
+		// not a JSON boolean literal.
+		$this->assertStringContainsString( '"isPolicyPage":"1"', $data );
+		$this->assertStringContainsString( home_url( '/' ), $data );
+	}
+
+	/**
+	 * On every other page, isPolicyPage must serialize to the JS-falsy empty
+	 * string — the reopen trigger there should simply reload in place.
+	 */
+	public function test_localized_script_data_does_not_flag_other_pages_as_the_policy_page() {
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$this->cookie_notice->enqueue_assets();
+
+		$data = wp_scripts()->get_data( 'frontconsent-cookie-notice', 'data' );
+
+		$this->assertStringContainsString( '"isPolicyPage":""', $data );
+	}
 }

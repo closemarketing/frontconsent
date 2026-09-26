@@ -57,6 +57,25 @@ class CookieNoticeContrastTest extends TestCase {
 	}
 
 	/**
+	 * On a dark panel, a dark accent that can't reach 4.5:1 against that
+	 * dark background must fall back to a light neutral (white), not the
+	 * '#111827' dark neutral — which would be nearly invisible on a black
+	 * panel. This was a real bug: the contrast check always tested against
+	 * white regardless of the panel's actual background color.
+	 */
+	public function test_dark_accent_falls_back_to_light_neutral_on_dark_background() {
+		$this->assertSame( '#ffffff', CookieNotice::get_readable_on_white_color( '#1f2937', '#000000' ) );
+	}
+
+	/**
+	 * An accent that already reaches 4.5:1 against the actual background is
+	 * used verbatim, regardless of what background color was passed.
+	 */
+	public function test_accent_with_sufficient_contrast_against_dark_background_is_used_verbatim() {
+		$this->assertSame( '#ffffff', CookieNotice::get_readable_on_white_color( '#ffffff', '#000000' ) );
+	}
+
+	/**
 	 * Malformed input (not a valid hex color) must not throw or warn — it
 	 * should degrade to treating the color as black, same as hex_to_rgb()'s
 	 * own documented fallback.

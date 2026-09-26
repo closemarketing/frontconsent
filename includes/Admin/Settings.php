@@ -521,7 +521,7 @@ class Settings {
 						<p class="frcn-label"><?php echo esc_html__( 'Preview', 'frontconsent' ); ?></p>
 						<?php
 						$preview_accent_text = CookieNotice::get_readable_text_color( $color );
-						$preview_accent_link = CookieNotice::get_readable_on_white_color( $color );
+						$preview_accent_link = CookieNotice::get_readable_on_white_color( $color, $bg_color );
 						$preview_panel_text  = CookieNotice::get_readable_text_color( $bg_color );
 						$preview_radius      = CookieNotice::get_radius_value( $radius );
 						?>

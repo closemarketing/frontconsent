@@ -317,6 +317,12 @@ class CookieNotice {
 				'cookieName'     => $this->get_cookie_name(),
 				'cookiePath'     => defined( 'COOKIEPATH' ) && COOKIEPATH ? COOKIEPATH : '/',
 				'expirationDays' => $days > 0 ? $days : 365,
+				// The reopen trigger's banner never renders on the policy page
+				// (see render_banner()) — reloading in place there would leave
+				// the visitor with no controls at all, so JS instead sends them
+				// home, where the banner is guaranteed to render.
+				'isPolicyPage'   => $this->is_policy_page(),
+				'homeUrl'        => home_url( '/' ),
 			)
 		);
 	}
@@ -425,7 +431,7 @@ class CookieNotice {
 
 		$is_modal    = 'popup' === $layout;
 		$accent_text = $this->get_readable_text_color( $color );
-		$accent_link = $this->get_readable_on_white_color( $color );
+		$accent_link = $this->get_readable_on_white_color( $color, $bg_color );
 		$panel_text  = $this->get_readable_text_color( $bg_color );
 		$style       = sprintf(
 			'--frcn-cookie-accent: %1$s; --frcn-cookie-accent-contrast: %2$s; --frcn-cookie-accent-on-light: %3$s; --frcn-cookie-bg: %4$s; --frcn-cookie-text: %5$s; --frcn-cookie-radius: %6$s;',
@@ -842,21 +848,40 @@ class CookieNotice {
 	}
 
 	/**
-	 * Ensure a color stays legible when used as text on the banner's white panel —
-	 * accent colors that don't reach a 4.5:1 contrast ratio against white fall
-	 * back to a dark neutral instead.
+	 * Ensure a color stays legible when used as text/link color on the
+	 * banner's panel — accent colors that don't reach a 4.5:1 contrast ratio
+	 * against the panel's actual configured background fall back to a dark
+	 * or light neutral instead (whichever contrasts better against that
+	 * background), rather than always assuming a white panel. A dark panel
+	 * with a light accent (e.g. black background, white accent) needs a
+	 * light fallback, not the '#111827' dark neutral that only makes sense
+	 * against a light/white background.
 	 *
 	 * Public static — pure color math with no instance state, also used by the
 	 * admin settings preview to show the same contrast the frontend actually renders.
 	 *
 	 * @param string $hex_color Requested accent color, e.g. '#687df9'.
-	 * @return string A color safe to use as text on a white background.
+	 * @param string $bg_color  The panel's actual background color, e.g. '#ffffff'.
+	 * @return string A color safe to use as text/link color on that background.
 	 */
-	public static function get_readable_on_white_color( $hex_color ) {
-		$luminance = self::get_relative_luminance( self::hex_to_rgb( $hex_color ) );
-		$contrast  = self::get_contrast_ratio( $luminance, 1 );
+	public static function get_readable_on_white_color( $hex_color, $bg_color = '#ffffff' ) {
+		$bg_luminance = self::get_relative_luminance( self::hex_to_rgb( $bg_color ) );
+		$luminance    = self::get_relative_luminance( self::hex_to_rgb( $hex_color ) );
+		$contrast     = self::get_contrast_ratio( $luminance, $bg_luminance );
 
-		return $contrast >= 4.5 ? $hex_color : '#111827';
+		if ( $contrast >= 4.5 ) {
+			return $hex_color;
+		}
+
+		// Neither neutral is pure black/white: '#111827' reads as a softer
+		// dark neutral than '#000000' against a light panel, so it's kept as
+		// the light-background fallback; '#ffffff' is its light counterpart
+		// for a dark panel. Whichever contrasts better against the actual
+		// background wins.
+		$dark_neutral_contrast  = self::get_contrast_ratio( self::get_relative_luminance( self::hex_to_rgb( '#111827' ) ), $bg_luminance );
+		$light_neutral_contrast = self::get_contrast_ratio( 1, $bg_luminance );
+
+		return $light_neutral_contrast >= $dark_neutral_contrast ? '#ffffff' : '#111827';
 	}
 
 	/**

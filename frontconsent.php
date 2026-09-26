@@ -51,9 +51,14 @@ add_action(
  * @return void
  */
 function frcn_plugin_activation_redirect() {
-	// Bail if activating from network or bulk activation.
+	// Bail if activating from network or bulk activation — but the flag was
+	// already set by register_activation_hook() regardless (it fires on
+	// every activation, bulk included), so it must still be cleared here.
+	// Otherwise a later, unrelated admin_init request would find it still
+	// set and redirect the administrator unexpectedly.
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Checking WordPress activation parameter, not processing form data.
 	if ( is_network_admin() || isset( $_GET['activate-multi'] ) ) {
+		delete_option( 'frcn_activation_redirect' );
 		return;
 	}
 

@@ -96,7 +96,9 @@ function createEnvironment(options = {}) {
 			ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
 			cookieName: 'frcn_cookie_consent',
 			cookiePath: '/',
-			expirationDays: 365
+			expirationDays: 365,
+			isPolicyPage: options.isPolicyPage || '',
+			homeUrl: options.homeUrl || 'https://example.test/'
 		},
 		window
 	};
@@ -232,4 +234,43 @@ test('reopen trigger is revealed and clears the consent cookie on click', () => 
 	environment.reopenListeners.click();
 
 	assert.equal(reloaded, true);
+});
+
+test('reopen trigger on the policy page navigates home instead of reloading in place', () => {
+	const environment = createEnvironment({
+		cookie: 'frcn_cookie_consent=accepted',
+		isPolicyPage: '1',
+		homeUrl: 'https://example.test/'
+	});
+
+	let reloaded = false;
+	environment.window.location.reload = () => { reloaded = true; };
+
+	environment.reopenListeners.click();
+
+	assert.equal(reloaded, false);
+	assert.equal(environment.window.location.href, 'https://example.test/');
+});
+
+test('accepting sends the consent update through gtag(), not a raw dataLayer push', async () => {
+	const environment = createEnvironment();
+
+	environment.actionListeners.accept.click();
+	await new Promise((resolve) => setImmediate(resolve));
+
+	assert.equal(typeof environment.window.gtag, 'function');
+
+	const consentUpdateCalls = environment.window.dataLayer.filter(
+		(entry) => Array.isArray(entry) && entry[0] === 'consent' && entry[1] === 'update'
+	);
+
+	// gtag() itself pushes `arguments` (array-like, not a plain Array), so a
+	// correctly routed call must NOT also appear as a plain-array push —
+	// that would mean the raw dataLayer.push(['consent', 'update', ...])
+	// regression is back instead of gtag('consent', 'update', ...).
+	assert.equal(consentUpdateCalls.length, 0);
+	assert.ok(
+		environment.window.dataLayer.some((entry) => entry && entry[0] === 'consent' && entry[1] === 'update' && entry[2] && entry[2].analytics_storage === 'granted'),
+		'expected a consent update entry queued via gtag()'
+	);
 });

@@ -51,6 +51,14 @@ class Plugin_Main {
 	 * @return void
 	 */
 	private function init() {
+		// Migration reads/writes Frontend\CookieNotice's stat option constants
+		// and get_tracking_integrations(), so that class must be loaded first.
+		if ( ! class_exists( 'FrontConsent\Frontend\CookieNotice' ) ) {
+			require_once FRCN_PLUGIN_PATH . 'includes/Frontend/CookieNotice.php';
+		}
+		if ( ! class_exists( 'FrontConsent\Migration' ) ) {
+			require_once FRCN_PLUGIN_PATH . 'includes/Migration.php';
+		}
 		Migration::maybe_run();
 
 		$this->load_modules();
@@ -58,6 +66,13 @@ class Plugin_Main {
 
 	/**
 	 * Load plugin modules.
+	 *
+	 * The plugin ships no runtime Composer dependencies — vendor/autoload.php
+	 * is only ever present in a local dev checkout (PHPStan, PHPCS,
+	 * PHPUnit's own dependencies) and is never bundled in an installable
+	 * plugin zip. Every runtime class is therefore require_once'd here
+	 * directly, the same guarded pattern FrontBlocks uses, instead of
+	 * relying on the PSR-4 autoloader being present.
 	 *
 	 * @return void
 	 */
@@ -69,7 +84,7 @@ class Plugin_Main {
 			new Admin\Settings();
 		}
 
-		// Cookie Notice module.
+		// Cookie Notice module — already required in init(), before Migration ran.
 		new Frontend\CookieNotice();
 	}
 }
