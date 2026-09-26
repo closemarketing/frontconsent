@@ -1,7 +1,6 @@
 === FrontConsent ===
-Contributors: davidperez, sacrajaimez, alexcm13
+Contributors: davidperez, sacrajaimez, alexcm13, closetechnology
 Tags: cookies, consent, gdpr, cookie notice, aepd
-Donate link: https://close.marketing/go/donate/
 Requires at least: 5.8
 Tested up to: 7.1
 Stable tag: 1.0.0
@@ -30,6 +29,26 @@ The settings page shows a simple accepted/rejected acceptance-rate stat (site ad
 Extend Cookie Notice with separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog and a reusable trigger that lets visitors update their choices later. Google Ads, Meta Pixel and Microsoft Clarity only run after the relevant category is accepted. It also supports the official Meta Pixel for WordPress plugin by holding its Pixel and Conversions API signals until Marketing consent.
 
 More information in the [FrontConsent PRO](https://close.technology/en/wordpress-plugins/frontconsent-pro/?utm_source=WordPressORGReadme&utm_medium=link&utm_campaign=frontconsent) page.
+
+== External services ==
+
+This plugin only connects to external services that the site owner explicitly configures — none are contacted by default. All connections below happen entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category; no data is ever sent from the server.
+
+**Google Tag Manager / Google Analytics 4 (GA4)**
+If a site administrator enters a Google Tag Manager container ID or a GA4 Measurement ID in the plugin settings, the visitor's browser loads the corresponding Google script (`https://www.googletagmanager.com/gtm.js` or `https://www.googletagmanager.com/gtag/js`) once the visitor accepts. This sends standard Google Tag Manager/Analytics data (e.g. page views, and any events the site's own tag configuration adds) to Google.
+Service provided by Google: [Terms of Service](https://marketingplatform.google.com/about/analytics/terms/us/), [Privacy Policy](https://policies.google.com/privacy).
+
+**Clientify Analytics (Plus or classic)**
+If a site administrator adds a Clientify Analytics tracking ID, the visitor's browser loads Clientify's tracking script (`https://analyticsplusdev.clientify.net` or `https://analytics.clientify.net`) once the visitor accepts, sending page-view and visitor tracking data to Clientify.
+Service provided by Clientify: [Terms of Service](https://clientify.com/terminos-y-condiciones/), [Privacy Policy](https://clientify.com/politica-de-privacidad/).
+
+**Brevo**
+If a site administrator adds a Brevo tracking snippet, the visitor's browser loads Brevo's SDK (`https://cdn.brevo.com/js/sdk-loader.js`) once the visitor accepts, sending visitor tracking data to Brevo.
+Service provided by Brevo: [Terms of Service](https://www.brevo.com/legal/termsofuse/), [Privacy Policy](https://www.brevo.com/legal/privacypolicy/).
+
+**ChatGPT Ads (OpenAI)**
+If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads OpenAI's ads pixel script (`https://bzrcdn.openai.com/sdk/oaiq.min.js`) once the visitor accepts, sending conversion/attribution tracking data to OpenAI.
+Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Installation ==
 

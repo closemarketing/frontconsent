@@ -222,12 +222,29 @@
 	flex-shrink: 0;
 	border-radius: 50%;
 	background-color: var(--frcn-cookie-accent);
-	color: var(--frcn-cookie-accent-contrast);
 }
 
-.frcn-cookie-notice__icon svg {
+/*
+ * The glyph is an external SVG file (cookie-icon.svg), not inlined markup —
+ * loaded as a CSS mask so it still picks up the configured accent-contrast
+ * color via currentColor's usual replacement, background-color here, exactly
+ * like an inline `fill="currentColor"` SVG would, without ever needing to
+ * echo raw SVG markup from PHP.
+ */
+.frcn-cookie-notice__icon::before {
+	content: '';
+	display: block;
 	width: 32px;
 	height: 32px;
+	background-color: var(--frcn-cookie-accent-contrast);
+	-webkit-mask-image: var(--frcn-cookie-icon-url);
+	mask-image: var(--frcn-cookie-icon-url);
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
 }
 
 .frcn-cookie-notice--popup .frcn-cookie-notice__actions {

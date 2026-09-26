@@ -126,7 +126,7 @@ test('does not load ChatGPT Ads before consent and loads it after acceptance', a
 });
 
 test('the complete inline bootstrap initializes ChatGPT Ads for an accepted returning visitor', async () => {
-	const inlineBootstrapMatch = cookieNoticePhp.match(/public function render_consent_bootstrap_script\(\) \{[\s\S]*?<script>\s*([\s\S]*?)\s*<\/script>/);
+	const inlineBootstrapMatch = cookieNoticePhp.match(/public function render_consent_bootstrap_script\(\) \{[\s\S]*?\$code = "\n([\s\S]*?)\n\t{2,3}";/);
 	assert.ok(inlineBootstrapMatch);
 
 	const scripts = [];
@@ -138,8 +138,8 @@ test('the complete inline bootstrap initializes ChatGPT Ads for an accepted retu
 	};
 	const window = {};
 	const inlineBootstrapScript = inlineBootstrapMatch[1]
-		.replace(/<\?php echo esc_js\( \$cookie_name \); \?>/g, 'frcn_cookie_consent')
-		.replace(/<\?php echo esc_url\( \$this->get_ajax_url\(\) \); \?>/g, 'https://example.test/wp-admin/admin-ajax.php');
+		.replace(/" \. esc_js\( \$cookie_name \) \. "/g, 'frcn_cookie_consent')
+		.replace(/" \. esc_url\( \$this->get_ajax_url\(\) \) \. "/g, 'https://example.test/wp-admin/admin-ajax.php');
 
 	vm.runInNewContext(inlineBootstrapScript, {
 		Array,

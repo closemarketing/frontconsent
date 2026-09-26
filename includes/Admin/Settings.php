@@ -529,12 +529,10 @@ class Settings {
 							<div
 								id="frcn-cookie-notice-preview"
 								class="frcn-cookie-notice frcn-cookie-notice-preview frcn-cookie-notice--<?php echo esc_attr( $layout ); ?><?php echo 'box' === $layout ? ' frcn-cookie-notice--' . ( 'bottom-left' === $position ? 'left' : 'right' ) : ''; ?>"
-								style="--frcn-cookie-accent: <?php echo esc_attr( $color ); ?>; --frcn-cookie-accent-contrast: <?php echo esc_attr( $preview_accent_text ); ?>; --frcn-cookie-accent-on-light: <?php echo esc_attr( $preview_accent_link ); ?>; --frcn-cookie-bg: <?php echo esc_attr( $bg_color ); ?>; --frcn-cookie-text: <?php echo esc_attr( $preview_panel_text ); ?>; --frcn-cookie-radius: <?php echo esc_attr( $preview_radius ); ?>;"
+								style="--frcn-cookie-accent: <?php echo esc_attr( $color ); ?>; --frcn-cookie-accent-contrast: <?php echo esc_attr( $preview_accent_text ); ?>; --frcn-cookie-accent-on-light: <?php echo esc_attr( $preview_accent_link ); ?>; --frcn-cookie-bg: <?php echo esc_attr( $bg_color ); ?>; --frcn-cookie-text: <?php echo esc_attr( $preview_panel_text ); ?>; --frcn-cookie-radius: <?php echo esc_attr( $preview_radius ); ?>; --frcn-cookie-icon-url: url(<?php echo esc_attr( FRCN_PLUGIN_URL . 'assets/cookie-notice/cookie-icon.svg' ); ?>);"
 							>
 								<div class="frcn-cookie-notice__panel">
-									<span id="frcn-cookie-notice-preview-icon" class="frcn-cookie-notice__icon">
-										<?php echo CookieNotice::get_cookie_icon_svg(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static inline SVG, no dynamic data. ?>
-									</span>
+									<span id="frcn-cookie-notice-preview-icon" class="frcn-cookie-notice__icon"></span>
 									<p class="frcn-cookie-notice__message">
 										<?php echo esc_html( '' !== $message ? $message : __( 'We use cookies to improve your experience on our website. Please choose whether to accept or reject them.', 'frontconsent' ) ); ?>
 									</p>
