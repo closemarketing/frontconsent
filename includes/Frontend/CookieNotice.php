@@ -244,14 +244,31 @@ class CookieNotice {
 	 * @return string
 	 */
 	private function get_ajax_url() {
+		return $this->get_frontend_origin_admin_url( 'admin-ajax.php' );
+	}
+
+	/**
+	 * Get an admin-*.php URL, forced onto the frontend's own scheme and host —
+	 * used by get_ajax_url() (admin-ajax.php) and the no-JS <form> fallback's
+	 * action attribute (admin-post.php). Both need the same fix: on an install
+	 * where WP_HOME and WP_SITEURL use different hosts, admin_url()'s own host
+	 * would set the consent cookie under the *backend* host, and a browser
+	 * redirected back to the *frontend* host would never see that cookie again
+	 * — same underlying problem as get_ajax_url()'s CORS/same-origin concern,
+	 * just surfacing as a cookie-host mismatch instead for a plain form POST.
+	 *
+	 * @param string $admin_script E.g. 'admin-ajax.php' or 'admin-post.php'.
+	 * @return string
+	 */
+	private function get_frontend_origin_admin_url( $admin_script ) {
 		$home_parts = wp_parse_url( home_url() );
-		$ajax_path  = (string) wp_parse_url( admin_url( 'admin-ajax.php' ), PHP_URL_PATH );
+		$admin_path = (string) wp_parse_url( admin_url( $admin_script ), PHP_URL_PATH );
 
 		$scheme = is_ssl() ? 'https' : 'http';
 		$host   = $home_parts['host'] ?? '';
 		$port   = isset( $home_parts['port'] ) ? ':' . $home_parts['port'] : '';
 
-		return $scheme . '://' . $host . $port . $ajax_path;
+		return $scheme . '://' . $host . $port . $admin_path;
 	}
 
 	/**
@@ -553,10 +570,9 @@ class CookieNotice {
 		// log_consent_form_submission() sets the same consent cookie
 		// server-side and redirects back to this page.
 		?>
-		<form id="frcn-cookie-notice-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<form id="frcn-cookie-notice-form" method="post" action="<?php echo esc_url( $this->get_frontend_origin_admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="frcn_log_cookie_decision" />
 			<input type="hidden" name="frcn_redirect" value="<?php echo esc_url( $this->get_current_url() ); ?>" />
-			<?php wp_nonce_field( self::NONCE_ACTION, 'frcn_nonce', false ); ?>
 		</form>
 		<?php
 		// Without JS, nothing would ever remove '--init' (see the class list
@@ -1203,43 +1219,89 @@ class CookieNotice {
 	 * log_consent_form_callback() so the validation/cookie-setting logic is
 	 * directly testable without the process-terminating exit() around it.
 	 *
+	 * Deliberately unauthenticated with no nonce check, the same way
+	 * get_config_callback() is: the banner markup this form is embedded in
+	 * is cache-neutral (see render_banner()), printed identically for every
+	 * visitor of a URL, so any nonce baked into it would go stale the moment
+	 * a full-page cache keeps that page around longer than a WordPress
+	 * nonce's lifetime — and unlike the AJAX path, a no-JS visitor has no way
+	 * to fetch a fresh one first. The worst a forged submission can do is
+	 * flip the submitter's own consent cookie or add one to a shared
+	 * accepted/rejected counter, the same acceptable risk already taken for
+	 * get_config_callback() and log_consent_callback()'s own nonce (fetched
+	 * fresh only because JS can do that; this can't).
+	 *
 	 * @return string Validated redirect URL.
 	 */
 	public function process_consent_form_submission() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- deliberately unauthenticated, see this method's own docblock above.
 		$redirect = isset( $_POST['frcn_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['frcn_redirect'] ) ) : home_url( '/' );
 		$redirect = wp_validate_redirect( $redirect, home_url( '/' ) );
 
-		$nonce = isset( $_POST['frcn_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['frcn_nonce'] ) ) : '';
-
-		if ( ! $this->is_enabled() || ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+		if ( ! $this->is_enabled() ) {
 			return $redirect;
 		}
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- deliberately unauthenticated, see this method's own docblock above.
 		$decision = isset( $_POST['frcn_decision'] ) ? sanitize_key( wp_unslash( $_POST['frcn_decision'] ) ) : '';
 
 		if ( in_array( $decision, array( 'accepted', 'rejected' ), true ) ) {
 			$days = (int) ( get_option( 'frontconsent_settings', array() )['cookie_notice_expiration_days'] ?? 365 );
 			$days = $days > 0 ? $days : 365;
 
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- admin-post.php runs this before any output in production; suppressed only so process_consent_form_submission() stays directly unit-testable outside that request lifecycle, where headers are already sent by the test bootstrap itself.
-			@setcookie(
-				$this->get_cookie_name(),
-				$decision,
-				array(
-					'expires'  => time() + ( $days * DAY_IN_SECONDS ),
-					// Always '/' — see the matching comment in enqueue_assets()
-					// for why COOKIEPATH isn't used here either.
-					'path'     => '/',
-					'secure'   => is_ssl(),
-					'httponly' => false,
-					'samesite' => 'Lax',
-				)
-			);
+			$this->set_consent_cookie_header( $decision, time() + ( $days * DAY_IN_SECONDS ) );
 
 			$this->maybe_increment_stat( $decision );
 		}
 
 		return $redirect;
+	}
+
+	/**
+	 * Set the consent cookie from the server side (the no-JS <form>
+	 * fallback's only way to do it, since there is no client-side JS here to
+	 * set it via document.cookie).
+	 *
+	 * Setcookie()'s single-array-of-options signature (letting SameSite be
+	 * set directly) only exists from PHP 7.3 — this plugin's own declared
+	 * minimum is PHP 7.0 (see frontconsent.php), so that form can't be used
+	 * unconditionally. header() is used instead of the older positional
+	 * setcookie() signature (which has no SameSite parameter at all before
+	 * PHP 7.3) so the exact same Set-Cookie header, SameSite included, is
+	 * sent on every supported PHP version.
+	 *
+	 * @param string $decision 'accepted' or 'rejected'.
+	 * @param int    $expires  Unix timestamp the cookie expires at.
+	 * @return void
+	 */
+	private function set_consent_cookie_header( $decision, $expires ) {
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.header_header, WordPress.PHP.NoSilencedErrors.Discouraged -- admin-post.php runs this before any output in production; the error is silenced only so this stays directly callable outside that request lifecycle (e.g. under a test suite, where headers are already sent by the test bootstrap itself and header() would otherwise warn).
+		@header( 'Set-Cookie: ' . $this->build_consent_cookie_header_value( $decision, $expires ), false );
+	}
+
+	/**
+	 * Build the Set-Cookie header value for a consent decision — split out
+	 * from set_consent_cookie_header() so the actual header string is
+	 * directly unit-testable without depending on header()/xdebug_get_headers()
+	 * working in whatever environment the test happens to run in.
+	 *
+	 * @param string $decision 'accepted' or 'rejected'.
+	 * @param int    $expires  Unix timestamp the cookie expires at.
+	 * @return string
+	 */
+	public function build_consent_cookie_header_value( $decision, $expires ) {
+		$parts = array(
+			rawurlencode( $this->get_cookie_name() ) . '=' . rawurlencode( $decision ),
+			'expires=' . gmdate( 'D, d-M-Y H:i:s T', $expires ),
+			'path=/',
+			'SameSite=Lax',
+		);
+
+		if ( is_ssl() ) {
+			$parts[] = 'Secure';
+		}
+
+		return implode( '; ', $parts );
 	}
 
 	/**

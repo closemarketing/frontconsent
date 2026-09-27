@@ -210,7 +210,7 @@
 	white-space: nowrap;
 }
 
-.frcn-cookie-notice-preview-stage {
+.frcn-settings-wrapper .frcn-cookie-notice-preview-stage {
 	position: relative;
 	min-height: 180px;
 	display: flex;
@@ -221,7 +221,7 @@
 	border-radius: 8px;
 }
 
-.frcn-cookie-notice-preview {
+.frcn-settings-wrapper .frcn-cookie-notice-preview {
 	position: static !important;
 	inset: auto !important;
 	left: auto !important;
@@ -232,20 +232,20 @@
 	width: auto !important;
 }
 
-.frcn-cookie-notice-preview.frcn-cookie-notice--bar {
+.frcn-settings-wrapper .frcn-cookie-notice-preview.frcn-cookie-notice--bar {
 	max-width: 480px;
 }
 
-.frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--right {
+.frcn-settings-wrapper .frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--right {
 	margin-left: auto;
 	margin-right: 0;
 }
 
-.frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--left {
+.frcn-settings-wrapper .frcn-cookie-notice-preview.frcn-cookie-notice--box.frcn-cookie-notice--left {
 	margin-right: auto;
 	margin-left: 0;
 }
 
-.frcn-cookie-notice-preview .frcn-cookie-notice__panel {
+.frcn-settings-wrapper .frcn-cookie-notice-preview .frcn-cookie-notice__panel {
 	max-height: none;
 }

@@ -27,12 +27,11 @@ class CookieNoticeFormFallbackTest extends TestCase {
 
 	public function tear_down() {
 		delete_option( 'frontconsent_settings' );
-		unset( $_POST['frcn_nonce'], $_POST['frcn_decision'], $_POST['frcn_redirect'] );
+		unset( $_POST['frcn_decision'], $_POST['frcn_redirect'] );
 		parent::tear_down();
 	}
 
 	public function test_valid_acceptance_returns_the_requested_redirect() {
-		$_POST['frcn_nonce']    = wp_create_nonce( CookieNotice::NONCE_ACTION );
 		$_POST['frcn_decision'] = 'accepted';
 		$_POST['frcn_redirect'] = home_url( '/some-page/' );
 
@@ -42,11 +41,28 @@ class CookieNoticeFormFallbackTest extends TestCase {
 	}
 
 	/**
-	 * A missing/invalid nonce must still return a redirect target (so the
-	 * visitor isn't left on a dead admin-post.php response) but must not
-	 * process the decision.
+	 * Deliberately unauthenticated (see process_consent_form_submission()'s
+	 * own docblock): a no-JS visitor has no way to fetch a fresh nonce
+	 * before submitting, and the banner it's embedded in is cache-neutral
+	 * HTML, so any nonce baked into it would go stale under a full-page
+	 * cache. No nonce field is even sent by the form.
 	 */
-	public function test_missing_nonce_still_returns_a_redirect() {
+	public function test_submission_is_processed_without_any_nonce() {
+		$_POST['frcn_decision'] = 'accepted';
+		$_POST['frcn_redirect'] = home_url( '/some-page/' );
+
+		$redirect = $this->cookie_notice->process_consent_form_submission();
+
+		$this->assertSame( home_url( '/some-page/' ), $redirect );
+	}
+
+	/**
+	 * Cookie Notice disabled must skip processing the decision, but must
+	 * still return a redirect target.
+	 */
+	public function test_disabled_cookie_notice_still_returns_a_redirect() {
+		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => false ) );
+
 		$_POST['frcn_decision'] = 'accepted';
 		$_POST['frcn_redirect'] = home_url( '/some-page/' );
 
@@ -61,7 +77,6 @@ class CookieNoticeFormFallbackTest extends TestCase {
 	 * frcn_redirect POST field safe to redirect to at all.
 	 */
 	public function test_redirect_falls_back_to_home_when_target_is_off_site() {
-		$_POST['frcn_nonce']    = wp_create_nonce( CookieNotice::NONCE_ACTION );
 		$_POST['frcn_decision'] = 'accepted';
 		$_POST['frcn_redirect'] = 'https://evil.example.com/';
 
@@ -76,12 +91,27 @@ class CookieNoticeFormFallbackTest extends TestCase {
 	 * return a redirect target.
 	 */
 	public function test_invalid_decision_is_ignored_but_still_redirects() {
-		$_POST['frcn_nonce']    = wp_create_nonce( CookieNotice::NONCE_ACTION );
 		$_POST['frcn_decision'] = 'not-a-real-decision';
 		$_POST['frcn_redirect'] = home_url( '/some-page/' );
 
 		$redirect = $this->cookie_notice->process_consent_form_submission();
 
 		$this->assertSame( home_url( '/some-page/' ), $redirect );
+	}
+
+	/**
+	 * The Set-Cookie header value must contain the decision, path=/ (not
+	 * COOKIEPATH — see the matching PHP-side comment) and SameSite=Lax —
+	 * this is what makes the decision stick at all on PHP 7.0-7.2, where
+	 * setcookie()'s options-array form (and its SameSite support) doesn't
+	 * exist yet, since header() is used instead specifically to reach every
+	 * supported PHP version with the same cookie attributes.
+	 */
+	public function test_cookie_header_value_contains_the_decision_and_expected_attributes() {
+		$header = $this->cookie_notice->build_consent_cookie_header_value( 'accepted', time() + DAY_IN_SECONDS );
+
+		$this->assertStringContainsString( 'frcn_cookie_consent=accepted', $header );
+		$this->assertStringContainsString( 'path=/', $header );
+		$this->assertStringContainsString( 'SameSite=Lax', $header );
 	}
 }
