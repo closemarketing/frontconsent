@@ -178,8 +178,8 @@ class Settings {
 
 		$tabs = array(
 			array(
-				'id'    => 'cookie-notice',
-				'label' => __( 'Cookie Notice', 'frontconsent' ),
+				'id'    => 'settings',
+				'label' => __( 'Settings', 'frontconsent' ),
 			),
 		);
 
@@ -218,18 +218,38 @@ class Settings {
 			<form action="options.php" method="post" id="frcn-settings-form">
 				<?php settings_fields( self::OPTION_NAME ); ?>
 
-				<div class="frcn-tab-panel" data-tab-panel="cookie-notice">
-					<?php
-					do_settings_sections( $this->page_slug );
-					submit_button();
-					?>
+				<div class="frcn-tab-panel" data-tab-panel="settings">
+					<?php do_settings_sections( $this->page_slug ); ?>
 				</div>
+
+				<?php
+				/**
+				 * Fires inside the main settings form, before the submit
+				 * button, for a companion plugin to render its own tab panel
+				 * whose fields save through this same form (i.e. registered
+				 * under the `frontconsent_settings` option group via
+				 * `register_setting()`).
+				 *
+				 * A hooked callback must echo its own
+				 * `<div class="frcn-tab-panel" data-tab-panel="...">…</div>`
+				 * matching the `id` it added via `frontconsent_settings_tabs`.
+				 *
+				 * @since 1.1.0
+				 */
+				do_action( 'frontconsent_settings_form_tab_panels' );
+
+				submit_button();
+				?>
 			</form>
 
 			<?php
 			/**
 			 * Fires after the main settings form, for a companion plugin to
-			 * render its own tab panel.
+			 * render its own tab panel that manages its own persistence
+			 * (e.g. a License tab with its own <form> and option group) —
+			 * not for panels whose fields need to save through the main
+			 * settings form above; use `frontconsent_settings_form_tab_panels`
+			 * for those instead.
 			 *
 			 * A hooked callback must echo its own
 			 * `<div class="frcn-tab-panel" data-tab-panel="...">…</div>`
