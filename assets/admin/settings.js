@@ -181,5 +181,16 @@
 				referer.value = url + '#' + tabId;
 			});
 		});
+
+		// Plain links to a tab from outside the tab bar itself (e.g. a
+		// "license not active" notice pointing at the License tab) — kept
+		// separate from tabButtons so they don't join its roving-tabindex
+		// keyboard cycle.
+		document.querySelectorAll('[data-tab-link]').forEach(function (link) {
+			link.addEventListener('click', function (event) {
+				event.preventDefault();
+				activateTab(link.getAttribute('data-tab-link'));
+			});
+		});
 	}
 })();
