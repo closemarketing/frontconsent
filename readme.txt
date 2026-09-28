@@ -3,8 +3,8 @@ Contributors: davidperez, sacrajaimez, alexcm13, closetechnology
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 1.1.0
-Version: 1.1.0
+Stable tag: 1.0.1
+Version: 1.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -68,7 +68,7 @@ Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-
 
 == Changelog ==
 
-= 1.1.0 =
+= 1.0.1 =
 * Settings page now uses tabs, so a companion plugin can add its own tab via the new `frontconsent_settings_tabs` filter, rendering its panel on either `frontconsent_settings_form_tab_panels` (fields saved through the main settings form) or `frontconsent_settings_tab_panels` (a panel with its own form, e.g. FrontConsent PRO's License tab).
 * Added a FrontConsent PRO upsell tab and an inline promo link on the Cookie Notice tab, shown only when FrontConsent PRO isn't installed.
 
