@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<ruleset name="Coding Standards for FrontConsent">
+	<description>Coding standards for the FrontConsent plugin.</description>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>reports/*</exclude-pattern>
+
+	<arg value="ps"/>
+	<arg name="extensions" value="php"/>
+
+	<file>./frontconsent.php</file>
+	<file>./includes</file>
+
+	<rule ref="WordPress">
+		<exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+		<exclude name="WordPress.DB" />
+		<exclude name="WordPress.Files.FileName"/>
+		<exclude name="WordPress.NamingConventions.ValidFunctionName" />
+	</rule>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array" value="frontconsent" />
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.Utils.I18nTextDomainFixer">
+		<properties>
+			<property name="old_text_domain" type="array">
+				<element value="" />
+			</property>
+			<property name="new_text_domain" value="frontconsent" />
+		</properties>
+	</rule>
+</ruleset>
