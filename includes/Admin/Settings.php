@@ -39,6 +39,17 @@ class Settings {
 	private $page_slug = 'frontconsent-settings';
 
 	/**
+	 * Whether a companion plugin has registered a "license" tab, i.e.
+	 * FrontConsent PRO (or an equivalent) is active. Set by render_page()
+	 * before do_settings_sections() fires section_cookie_notice_callback(),
+	 * which reads it to hide the free plugin's own PRO upsell markup once
+	 * there's nothing left to upsell.
+	 *
+	 * @var bool
+	 */
+	private $has_license_tab = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -135,11 +146,40 @@ class Settings {
 	public function section_cookie_notice_callback() {
 		?>
 		<p><?php echo esc_html__( 'Show a cookie consent banner and only load Google Tag Manager / GA4 after a visitor accepts.', 'frontconsent' ); ?></p>
+		<?php if ( ! $this->has_license_tab ) : ?>
+			<p class="frcn-hint">
+				<?php
+				printf(
+					wp_kses(
+						/* translators: %s: FrontConsent PRO product URL. */
+						__( 'Need per-category consent, a consent audit log, or generic script blocking? <a href="%s" target="_blank" rel="noopener noreferrer">Get FrontConsent PRO →</a>', 'frontconsent' ),
+						array(
+							'a' => array(
+								'href'   => array(),
+								'target' => array(),
+								'rel'    => array(),
+							),
+						)
+					),
+					esc_url( 'https://close.technology/wordpress-plugins/frontconsent-pro/?utm_source=frontconsent&utm_medium=plugin&utm_campaign=settings-pro-cta' )
+				);
+				?>
+			</p>
+		<?php endif; ?>
 		<?php
 	}
 
+
 	/**
 	 * Render the settings page.
+	 *
+	 * A minimal tab shell: the "Cookie Notice" tab always renders the
+	 * existing settings form unchanged. Companion PRO plugins add their own
+	 * tab via the `frontconsent_settings_tabs` filter and render its panel
+	 * on the `frontconsent_settings_tab_panels` action — this free plugin
+	 * stays entirely unaware of what, if anything, is licensed. When no
+	 * companion plugin has added a "license" tab, a lightweight upsell tab
+	 * fills that slot instead (see render_pro_upsell_tab()).
 	 *
 	 * @return void
 	 */
@@ -149,16 +189,133 @@ class Settings {
 		}
 
 		$this->render_cache_notice();
+
+		$tabs = array(
+			array(
+				'id'    => 'settings',
+				'label' => __( 'Settings', 'frontconsent' ),
+			),
+		);
+
+		/**
+		 * Filters the settings tabs displayed in the FrontConsent admin screen.
+		 *
+		 * A companion plugin can add a tab by appending an array with an `id`
+		 * and `label` key, then render its matching panel on
+		 * `frontconsent_settings_tab_panels`.
+		 *
+		 * @since 1.1.0
+		 * @param array $tabs Settings tabs.
+		 */
+		$tabs = apply_filters( 'frontconsent_settings_tabs', $tabs );
+
+		$has_license_tab       = in_array( 'license', wp_list_pluck( $tabs, 'id' ), true );
+		$this->has_license_tab = $has_license_tab;
+
+		if ( ! $has_license_tab ) {
+			$tabs[] = array(
+				'id'    => 'license',
+				'label' => __( 'FrontConsent PRO', 'frontconsent' ),
+			);
+		}
 		?>
 		<div class="wrap frcn-settings-wrapper">
 			<h1><?php echo esc_html__( 'FrontConsent', 'frontconsent' ); ?></h1>
-			<form action="options.php" method="post">
+
+			<div class="frcn-tabs" role="tablist">
+				<?php foreach ( $tabs as $tab ) : ?>
+					<button
+						type="button"
+						id="frcn-tab-<?php echo esc_attr( $tab['id'] ); ?>"
+						class="frcn-tab-btn"
+						data-tab-target="<?php echo esc_attr( $tab['id'] ); ?>"
+						role="tab"
+						aria-selected="false"
+						aria-controls="frcn-tabpanel-<?php echo esc_attr( $tab['id'] ); ?>"
+					>
+						<?php echo esc_html( $tab['label'] ); ?>
+					</button>
+				<?php endforeach; ?>
+			</div>
+
+			<form action="options.php" method="post" id="frcn-settings-form">
+				<?php settings_fields( self::OPTION_NAME ); ?>
+
+				<div class="frcn-tab-panel" data-tab-panel="settings" id="frcn-tabpanel-settings" role="tabpanel" aria-labelledby="frcn-tab-settings">
+					<?php do_settings_sections( $this->page_slug ); ?>
+				</div>
+
 				<?php
-				settings_fields( self::OPTION_NAME );
-				do_settings_sections( $this->page_slug );
-				submit_button();
+				/**
+				 * Fires inside the main settings form, before the submit
+				 * button, for a companion plugin to render its own tab panel
+				 * whose fields save through this same form (i.e. registered
+				 * under the `frontconsent_settings` option group via
+				 * `register_setting()`).
+				 *
+				 * A hooked callback must echo its own panel matching the `id`
+				 * it added via `frontconsent_settings_tabs`, wired up for
+				 * assistive technology the same way the built-in panels are:
+				 * `<div class="frcn-tab-panel" data-tab-panel="{id}" id="frcn-tabpanel-{id}" role="tabpanel" aria-labelledby="frcn-tab-{id}">…</div>`.
+				 *
+				 * @since 1.1.0
+				 */
+				do_action( 'frontconsent_settings_form_tab_panels' );
 				?>
+
+				<div id="frcn-settings-form-submit">
+					<?php submit_button(); ?>
+				</div>
 			</form>
+
+			<?php
+			/**
+			 * Fires after the main settings form, for a companion plugin to
+			 * render its own tab panel that manages its own persistence
+			 * (e.g. a License tab with its own <form> and option group) —
+			 * not for panels whose fields need to save through the main
+			 * settings form above; use `frontconsent_settings_form_tab_panels`
+			 * for those instead.
+			 *
+			 * A hooked callback must echo its own panel matching the `id`
+			 * it added via `frontconsent_settings_tabs`, wired up for
+			 * assistive technology the same way the built-in panels are:
+			 * `<div class="frcn-tab-panel" data-tab-panel="{id}" id="frcn-tabpanel-{id}" role="tabpanel" aria-labelledby="frcn-tab-{id}">…</div>`.
+			 *
+			 * @since 1.1.0
+			 */
+			do_action( 'frontconsent_settings_tab_panels' );
+
+			if ( ! $has_license_tab ) {
+				$this->render_pro_upsell_tab();
+			}
+			?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the "FrontConsent PRO" upsell tab panel, shown in the license
+	 * tab's slot whenever no companion plugin has taken it over.
+	 *
+	 * @return void
+	 */
+	private function render_pro_upsell_tab() {
+		?>
+		<div class="frcn-tab-panel" data-tab-panel="license" id="frcn-tabpanel-license" role="tabpanel" aria-labelledby="frcn-tab-license" hidden>
+			<div class="frcn-upsell-card">
+				<span class="frcn-pro-chip">PRO</span>
+				<h2><?php esc_html_e( 'Advanced Cookie Management', 'frontconsent' ); ?></h2>
+				<p><?php esc_html_e( 'Separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog, a consent audit log for GDPR evidence, and generic script blocking for trackers with no dedicated integration.', 'frontconsent' ); ?></p>
+				<a
+					class="frcn-btn-primary"
+					href="<?php echo esc_url( 'https://close.technology/wordpress-plugins/frontconsent-pro/?utm_source=frontconsent&utm_medium=plugin&utm_campaign=settings-pro-tab' ); ?>"
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					<?php esc_html_e( 'Get FrontConsent PRO', 'frontconsent' ); ?> →
+				</a>
+			</div>
 		</div>
 		<?php
 	}

@@ -54,4 +54,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run JS tests
-        run: npm run test:cookie-notice
+        run: npm run test:js

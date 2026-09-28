@@ -2,6 +2,8 @@
 	"name": "frontconsent",
 	"private": true,
 	"scripts": {
-		"test:cookie-notice": "node --test tests/js/cookie-notice-injection.test.js"
+		"test:cookie-notice": "node --test tests/js/cookie-notice-injection.test.js",
+		"test:settings-tabs": "node --test tests/js/settings-tabs.test.js",
+		"test:js": "node --test tests/js/*.test.js"
 	}
 }
