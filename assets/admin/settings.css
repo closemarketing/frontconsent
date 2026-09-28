@@ -301,7 +301,10 @@
 	font-weight: 700;
 	letter-spacing: 0.06em;
 	color: #fff;
-	background: #687df9;
+	/* #5468e0 on white is a 4.74:1 contrast ratio, meeting WCAG AA (4.5:1)
+	   for this text size — the lighter #687df9 brand blue used elsewhere
+	   only reaches 3.57:1 and fails it. */
+	background: #5468e0;
 	border-radius: 3px;
 	padding: 2px 7px;
 	margin-bottom: 10px;
@@ -324,7 +327,8 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	background: #687df9;
+	/* Same 4.74:1-contrast blue as .frcn-pro-chip — see its comment. */
+	background: #5468e0;
 	color: #fff;
 	font-size: 13px;
 	font-weight: 600;
@@ -334,6 +338,6 @@
 }
 
 .frcn-settings-wrapper .frcn-btn-primary:hover {
-	background: #5468e0;
+	background: #4054d6;
 	color: #fff;
 }

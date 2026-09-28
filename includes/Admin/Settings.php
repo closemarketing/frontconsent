@@ -39,6 +39,17 @@ class Settings {
 	private $page_slug = 'frontconsent-settings';
 
 	/**
+	 * Whether a companion plugin has registered a "license" tab, i.e.
+	 * FrontConsent PRO (or an equivalent) is active. Set by render_page()
+	 * before do_settings_sections() fires section_cookie_notice_callback(),
+	 * which reads it to hide the free plugin's own PRO upsell markup once
+	 * there's nothing left to upsell.
+	 *
+	 * @var bool
+	 */
+	private $has_license_tab = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -135,26 +146,29 @@ class Settings {
 	public function section_cookie_notice_callback() {
 		?>
 		<p><?php echo esc_html__( 'Show a cookie consent banner and only load Google Tag Manager / GA4 after a visitor accepts.', 'frontconsent' ); ?></p>
-		<p class="frcn-hint">
-			<?php
-			printf(
-				wp_kses(
-					/* translators: %s: FrontConsent PRO product URL. */
-					__( 'Need per-category consent, a consent audit log, or generic script blocking? <a href="%s" target="_blank" rel="noopener noreferrer">Get FrontConsent PRO →</a>', 'frontconsent' ),
-					array(
-						'a' => array(
-							'href'   => array(),
-							'target' => array(),
-							'rel'    => array(),
-						),
-					)
-				),
-				esc_url( 'https://close.technology/wordpress-plugins/frontconsent-pro/?utm_source=frontconsent&utm_medium=plugin&utm_campaign=settings-pro-cta' )
-			);
-			?>
-		</p>
+		<?php if ( ! $this->has_license_tab ) : ?>
+			<p class="frcn-hint">
+				<?php
+				printf(
+					wp_kses(
+						/* translators: %s: FrontConsent PRO product URL. */
+						__( 'Need per-category consent, a consent audit log, or generic script blocking? <a href="%s" target="_blank" rel="noopener noreferrer">Get FrontConsent PRO →</a>', 'frontconsent' ),
+						array(
+							'a' => array(
+								'href'   => array(),
+								'target' => array(),
+								'rel'    => array(),
+							),
+						)
+					),
+					esc_url( 'https://close.technology/wordpress-plugins/frontconsent-pro/?utm_source=frontconsent&utm_medium=plugin&utm_campaign=settings-pro-cta' )
+				);
+				?>
+			</p>
+		<?php endif; ?>
 		<?php
 	}
+
 
 	/**
 	 * Render the settings page.
@@ -195,7 +209,8 @@ class Settings {
 		 */
 		$tabs = apply_filters( 'frontconsent_settings_tabs', $tabs );
 
-		$has_license_tab = in_array( 'license', wp_list_pluck( $tabs, 'id' ), true );
+		$has_license_tab       = in_array( 'license', wp_list_pluck( $tabs, 'id' ), true );
+		$this->has_license_tab = $has_license_tab;
 
 		if ( ! $has_license_tab ) {
 			$tabs[] = array(
@@ -237,9 +252,11 @@ class Settings {
 				 * @since 1.1.0
 				 */
 				do_action( 'frontconsent_settings_form_tab_panels' );
-
-				submit_button();
 				?>
+
+				<div id="frcn-settings-form-submit">
+					<?php submit_button(); ?>
+				</div>
 			</form>
 
 			<?php
