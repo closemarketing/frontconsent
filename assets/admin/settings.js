@@ -61,5 +61,70 @@
 		if (radiusSelect) {
 			radiusSelect.addEventListener('change', updatePreviewLayout);
 		}
+
+		initTabs();
 	});
+
+	/**
+	 * Tab bar / tab panel switching for the settings page shell. A companion
+	 * PRO plugin's tab button and panel are just more [data-tab-target] /
+	 * [data-tab-panel] elements — no special-casing needed here.
+	 */
+	function initTabs() {
+		var tabButtons = document.querySelectorAll('[data-tab-target]');
+		var tabPanels = document.querySelectorAll('[data-tab-panel]');
+
+		if (!tabButtons.length || !tabPanels.length) {
+			return;
+		}
+
+		function activateTab(tabId) {
+			var found = false;
+
+			tabPanels.forEach(function (panel) {
+				var match = panel.getAttribute('data-tab-panel') === tabId;
+				panel.hidden = !match;
+				found = found || match;
+			});
+
+			if (!found) {
+				return;
+			}
+
+			tabButtons.forEach(function (btn) {
+				var active = btn.getAttribute('data-tab-target') === tabId;
+				btn.classList.toggle('is-active', active);
+				btn.setAttribute('aria-selected', active ? 'true' : 'false');
+			});
+		}
+
+		tabButtons.forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				activateTab(btn.getAttribute('data-tab-target'));
+			});
+		});
+
+		var initialTab = tabButtons[0].getAttribute('data-tab-target');
+		var hash = window.location.hash.replace('#', '');
+
+		if (hash && document.querySelector('[data-tab-panel="' + hash + '"]')) {
+			initialTab = hash;
+		}
+
+		activateTab(initialTab);
+
+		// Keep the active tab across a save: WordPress redirects back to the
+		// referring URL after options.php processes the form.
+		var form = document.getElementById('frcn-settings-form');
+		var referer = form ? form.querySelector('input[name="_wp_http_referer"]') : null;
+
+		if (form && referer) {
+			form.addEventListener('submit', function () {
+				var active = document.querySelector('.frcn-tab-btn.is-active');
+				var tabId = active ? active.getAttribute('data-tab-target') : initialTab;
+				var url = referer.value.split('#')[0];
+				referer.value = url + '#' + tabId;
+			});
+		}
+	}
 })();

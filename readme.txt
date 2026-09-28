@@ -3,8 +3,8 @@ Contributors: davidperez, sacrajaimez, alexcm13, closetechnology
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 1.0.0
-Version: 1.0.0
+Stable tag: 1.1.0
+Version: 1.1.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,10 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= 1.1.0 =
+* Settings page now uses tabs, so a companion plugin can add its own tab (e.g. FrontConsent PRO's License tab) via the new `frontconsent_settings_tabs` filter and `frontconsent_settings_tab_panels` action.
+* Added a FrontConsent PRO upsell tab and an inline promo link on the Cookie Notice tab, shown only when FrontConsent PRO isn't installed.
 
 = 1.0.0 =
 * Initial release: cookie consent banner (full-width bar, boxed panel or centered popup) with Accept/Reject actions, custom message, accent color and expiration, extracted from FrontBlocks Site Tools' Cookie Notice module.

@@ -249,3 +249,92 @@
 .frcn-settings-wrapper .frcn-cookie-notice-preview .frcn-cookie-notice__panel {
 	max-height: none;
 }
+
+.frcn-settings-wrapper .frcn-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 16px 0 20px;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+.frcn-settings-wrapper .frcn-tab-btn {
+	display: flex;
+	align-items: center;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: #50575e;
+	font-weight: 500;
+	font-size: 13px;
+	padding: 9px 14px 8px;
+	border-radius: 4px 4px 0 0;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.frcn-settings-wrapper .frcn-tab-btn:hover {
+	background: #f6f7f7;
+}
+
+.frcn-settings-wrapper .frcn-tab-btn.is-active {
+	border-bottom-color: #687df9;
+	background: #eef2ff;
+	color: #1d2327;
+	font-weight: 600;
+}
+
+.frcn-settings-wrapper .frcn-tab-panel[hidden] {
+	display: none;
+}
+
+.frcn-settings-wrapper .frcn-upsell-card {
+	max-width: 520px;
+	background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+	border: 1px solid #dbe3fe;
+	border-radius: 8px;
+	padding: 24px;
+}
+
+.frcn-settings-wrapper .frcn-pro-chip {
+	display: inline-block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: #fff;
+	background: #687df9;
+	border-radius: 3px;
+	padding: 2px 7px;
+	margin-bottom: 10px;
+}
+
+.frcn-settings-wrapper .frcn-upsell-card h2 {
+	margin: 0 0 8px;
+	font-size: 17px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.frcn-settings-wrapper .frcn-upsell-card p {
+	margin: 0 0 16px;
+	color: #4b5563;
+	line-height: 1.5;
+}
+
+.frcn-settings-wrapper .frcn-btn-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: #687df9;
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+	padding: 9px 16px;
+	border-radius: 6px;
+}
+
+.frcn-settings-wrapper .frcn-btn-primary:hover {
+	background: #5468e0;
+	color: #fff;
+}
