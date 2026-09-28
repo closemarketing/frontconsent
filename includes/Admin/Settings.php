@@ -224,7 +224,15 @@ class Settings {
 
 			<div class="frcn-tabs" role="tablist">
 				<?php foreach ( $tabs as $tab ) : ?>
-					<button type="button" class="frcn-tab-btn" data-tab-target="<?php echo esc_attr( $tab['id'] ); ?>" role="tab" aria-selected="false">
+					<button
+						type="button"
+						id="frcn-tab-<?php echo esc_attr( $tab['id'] ); ?>"
+						class="frcn-tab-btn"
+						data-tab-target="<?php echo esc_attr( $tab['id'] ); ?>"
+						role="tab"
+						aria-selected="false"
+						aria-controls="frcn-tabpanel-<?php echo esc_attr( $tab['id'] ); ?>"
+					>
 						<?php echo esc_html( $tab['label'] ); ?>
 					</button>
 				<?php endforeach; ?>
@@ -233,7 +241,7 @@ class Settings {
 			<form action="options.php" method="post" id="frcn-settings-form">
 				<?php settings_fields( self::OPTION_NAME ); ?>
 
-				<div class="frcn-tab-panel" data-tab-panel="settings">
+				<div class="frcn-tab-panel" data-tab-panel="settings" id="frcn-tabpanel-settings" role="tabpanel" aria-labelledby="frcn-tab-settings">
 					<?php do_settings_sections( $this->page_slug ); ?>
 				</div>
 
@@ -245,9 +253,10 @@ class Settings {
 				 * under the `frontconsent_settings` option group via
 				 * `register_setting()`).
 				 *
-				 * A hooked callback must echo its own
-				 * `<div class="frcn-tab-panel" data-tab-panel="...">…</div>`
-				 * matching the `id` it added via `frontconsent_settings_tabs`.
+				 * A hooked callback must echo its own panel matching the `id`
+				 * it added via `frontconsent_settings_tabs`, wired up for
+				 * assistive technology the same way the built-in panels are:
+				 * `<div class="frcn-tab-panel" data-tab-panel="{id}" id="frcn-tabpanel-{id}" role="tabpanel" aria-labelledby="frcn-tab-{id}">…</div>`.
 				 *
 				 * @since 1.1.0
 				 */
@@ -268,9 +277,10 @@ class Settings {
 			 * settings form above; use `frontconsent_settings_form_tab_panels`
 			 * for those instead.
 			 *
-			 * A hooked callback must echo its own
-			 * `<div class="frcn-tab-panel" data-tab-panel="...">…</div>`
-			 * matching the `id` it added via `frontconsent_settings_tabs`.
+			 * A hooked callback must echo its own panel matching the `id`
+			 * it added via `frontconsent_settings_tabs`, wired up for
+			 * assistive technology the same way the built-in panels are:
+			 * `<div class="frcn-tab-panel" data-tab-panel="{id}" id="frcn-tabpanel-{id}" role="tabpanel" aria-labelledby="frcn-tab-{id}">…</div>`.
 			 *
 			 * @since 1.1.0
 			 */
@@ -292,7 +302,7 @@ class Settings {
 	 */
 	private function render_pro_upsell_tab() {
 		?>
-		<div class="frcn-tab-panel" data-tab-panel="license" hidden>
+		<div class="frcn-tab-panel" data-tab-panel="license" id="frcn-tabpanel-license" role="tabpanel" aria-labelledby="frcn-tab-license" hidden>
 			<div class="frcn-upsell-card">
 				<span class="frcn-pro-chip">PRO</span>
 				<h2><?php esc_html_e( 'Advanced Cookie Management', 'frontconsent' ); ?></h2>
