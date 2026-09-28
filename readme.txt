@@ -30,6 +30,22 @@ Extend Cookie Notice with separate Necessary, Analytics and Marketing preference
 
 More information in the [FrontConsent PRO](https://close.technology/en/wordpress-plugins/frontconsent-pro/?utm_source=WordPressORGReadme&utm_medium=link&utm_campaign=frontconsent) page.
 
+== Installation ==
+
+1. Upload the plugin files to the `/wp-content/plugins/frontconsent` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the 'Plugins' screen in WordPress.
+3. Configure the banner under Settings → FrontConsent.
+
+== Frequently Asked Questions ==
+
+= I was using FrontBlocks' Cookie Notice. What happens now? =
+
+Activating FrontConsent copies your existing Cookie Notice settings and acceptance/rejection stats from FrontBlocks into FrontConsent automatically, and turns off FrontBlocks' own banner so only one is ever shown.
+
+= Does this store consent records for audit purposes? =
+
+The free version keeps a simple aggregate accepted/rejected count. Per-visitor consent logging and cookie scanning are part of the planned Pro version.
+
 == External services ==
 
 This plugin only connects to external services that the site owner explicitly configures — none are contacted by default. All connections below happen entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category; no data is ever sent from the server.
@@ -49,22 +65,6 @@ Service provided by Brevo: [Terms of Service](https://www.brevo.com/legal/termso
 **ChatGPT Ads (OpenAI)**
 If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads OpenAI's ads pixel script (`https://bzrcdn.openai.com/sdk/oaiq.min.js`) once the visitor accepts, sending conversion/attribution tracking data to OpenAI.
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
-
-== Installation ==
-
-1. Upload the plugin files to the `/wp-content/plugins/frontconsent` directory, or install the plugin through the WordPress plugins screen directly.
-2. Activate the plugin through the 'Plugins' screen in WordPress.
-3. Configure the banner under Settings → FrontConsent.
-
-== Frequently Asked Questions ==
-
-= I was using FrontBlocks' Cookie Notice. What happens now? =
-
-Activating FrontConsent copies your existing Cookie Notice settings and acceptance/rejection stats from FrontBlocks into FrontConsent automatically, and turns off FrontBlocks' own banner so only one is ever shown.
-
-= Does this store consent records for audit purposes? =
-
-The free version keeps a simple aggregate accepted/rejected count. Per-visitor consent logging and cookie scanning are part of the planned Pro version.
 
 == Changelog ==
 
