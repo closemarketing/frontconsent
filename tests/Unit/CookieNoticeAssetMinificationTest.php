@@ -40,6 +40,16 @@ class CookieNoticeAssetMinificationTest extends TestCase {
 		}
 		$this->created_files = array();
 
+		// wp_register_script()/wp_register_style() are no-ops once a handle
+		// is already registered — they never overwrite its `src` — so
+		// without deregistering here, whichever `src` the first test in
+		// this file enqueues would "stick" for the same handle across every
+		// later test in this same PHPUnit process (WP core's own test
+		// suite resets many globals between tests, but not $wp_scripts/
+		// $wp_styles).
+		wp_deregister_script( 'frontconsent-cookie-notice' );
+		wp_deregister_style( 'frontconsent-cookie-notice' );
+
 		remove_all_actions( 'wp_head' );
 		remove_all_actions( 'wp_footer' );
 		remove_all_actions( 'wp_enqueue_scripts' );
