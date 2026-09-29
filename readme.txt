@@ -25,6 +25,9 @@ Paste a Google Tag Manager or GA4 ID (or install snippet), or a Clientify, Brevo
 **Acceptance stats:**
 The settings page shows a simple accepted/rejected acceptance-rate stat (site administrators are excluded from the count).
 
+**Script & Iframe Blocking:**
+Configure a list of match patterns (e.g. `youtube.com/embed`, `google.com/maps`, a custom tracking domain) mapped to a consent category, and FrontConsent holds back any matching `<script src="...">` or `<iframe src="...">` on the page — YouTube embeds, Maps, social widgets, or a custom tracking snippet added by your theme or another plugin — until the visitor accepts. This works for any third-party embed, not just Consent-Mode-aware tags.
+
 **Advanced Cookie Management (FrontConsent PRO):**
 Extend Cookie Notice with separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog and a reusable trigger that lets visitors update their choices later. Google Ads, Meta Pixel and Microsoft Clarity only run after the relevant category is accepted. It also supports the official Meta Pixel for WordPress plugin by holding its Pixel and Conversions API signals until Marketing consent.
 
@@ -67,6 +70,9 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= Unreleased =
+* Added generic Script & Iframe Blocking: a settings-configured list of match-pattern/category rules holds back any matching `<script src="...">` or `<iframe src="...">` on the page (YouTube, Maps, social widgets, custom tracking snippets, etc.) until the visitor accepts, complementing the existing Google Consent Mode v2 support.
 
 = 1.1.0 =
 * Settings page now uses tabs, so a companion plugin can add its own tab via the new `frontconsent_settings_tabs` filter, rendering its panel on either `frontconsent_settings_form_tab_panels` (fields saved through the main settings form) or `frontconsent_settings_tab_panels` (a panel with its own form, e.g. FrontConsent PRO's License tab).

@@ -11,6 +11,7 @@
 namespace FrontConsent\Admin;
 
 use FrontConsent\Frontend\CookieNotice;
+use FrontConsent\Frontend\ScriptBlocker;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -102,6 +103,14 @@ class Settings {
 			$this->page_slug,
 			'frontconsent_section_cookie_notice'
 		);
+
+		add_settings_field(
+			'script_blocker_rules',
+			__( 'Script &amp; Iframe Blocking', 'frontconsent' ),
+			array( $this, 'field_script_blocker_rules' ),
+			$this->page_slug,
+			'frontconsent_section_cookie_notice'
+		);
 	}
 
 	/**
@@ -152,7 +161,7 @@ class Settings {
 				printf(
 					wp_kses(
 						/* translators: %s: FrontConsent PRO product URL. */
-						__( 'Need per-category consent, a consent audit log, or generic script blocking? <a href="%s" target="_blank" rel="noopener noreferrer">Get FrontConsent PRO →</a>', 'frontconsent' ),
+						__( 'Need per-category consent, a consent audit log, or per-service placeholders (YouTube, Maps, social embeds) for blocked scripts? <a href="%s" target="_blank" rel="noopener noreferrer">Get FrontConsent PRO →</a>', 'frontconsent' ),
 						array(
 							'a' => array(
 								'href'   => array(),
@@ -306,7 +315,7 @@ class Settings {
 			<div class="frcn-upsell-card">
 				<span class="frcn-pro-chip">PRO</span>
 				<h2><?php esc_html_e( 'Advanced Cookie Management', 'frontconsent' ); ?></h2>
-				<p><?php esc_html_e( 'Separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog, a consent audit log for GDPR evidence, and generic script blocking for trackers with no dedicated integration.', 'frontconsent' ); ?></p>
+				<p><?php esc_html_e( 'Separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog, a consent audit log for GDPR evidence, and per-service placeholders (YouTube, Maps, social embeds) for scripts held back by consent.', 'frontconsent' ); ?></p>
 				<a
 					class="frcn-btn-primary"
 					href="<?php echo esc_url( 'https://close.technology/wordpress-plugins/frontconsent-pro/?utm_source=frontconsent&utm_medium=plugin&utm_campaign=settings-pro-tab' ); ?>"
@@ -725,6 +734,43 @@ class Settings {
 	}
 
 	/**
+	 * Render the generic script/iframe blocking rules field: a one-rule-per-
+	 * line textarea of `pattern|category` pairs. A simple textarea is a
+	 * deliberate v1 choice over a JS-driven repeatable-rows UI (no such
+	 * pattern exists elsewhere on this settings screen to match the style
+	 * of) — each line matches a substring of a `<script src="...">` or
+	 * `<iframe src="...">` tag's src attribute against a consent category.
+	 *
+	 * @return void
+	 */
+	public function field_script_blocker_rules() {
+		$rules = ScriptBlocker::get_rules();
+		$text  = ScriptBlocker::rules_to_text( $rules );
+		?>
+		<div class="frcn-panel">
+			<label for="script_blocker_rules_raw" class="frcn-label">
+				<?php echo esc_html__( 'Blocking rules', 'frontconsent' ); ?>
+			</label>
+			<textarea
+				id="script_blocker_rules_raw"
+				name="<?php echo esc_attr( self::OPTION_NAME ); ?>[script_blocker_rules_raw]"
+				rows="5"
+				class="frcn-input frcn-mono"
+				placeholder="youtube.com/embed|marketing&#10;google.com/maps|marketing&#10;my-tracker.example.com|analytics"
+			><?php echo esc_textarea( $text ); ?></textarea>
+			<p class="frcn-hint">
+				<?php
+				echo esc_html__(
+					'One rule per line, as "match|category". "match" is matched as a plain, case-insensitive text fragment against the src attribute of any <script> or <iframe> tag on the page (not a full regular expression) — e.g. "youtube.com/embed" or "google.com/maps". "category" is either "analytics" or "marketing" (defaults to "marketing" if omitted or unrecognized). A matching tag is held back — its script never fetches/executes and its iframe never loads its real src — until a visitor accepts the cookie notice.',
+					'frontconsent'
+				);
+				?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Check whether GTM4WP is set to load the same container as Cookie Notice.
 	 *
 	 * @param string $frontconsent_gtm_id FrontConsent GTM container ID.
@@ -957,6 +1003,10 @@ class Settings {
 
 			$sanitized['cookie_notice_tracking_integrations'] = $tracking_integrations;
 			unset( $sanitized['cookie_notice_tracking_type'], $sanitized['cookie_notice_tracking_id'] );
+		}
+
+		if ( array_key_exists( 'script_blocker_rules_raw', $value ) ) {
+			$sanitized[ ScriptBlocker::RULES_OPTION_KEY ] = ScriptBlocker::parse_rules_text( sanitize_textarea_field( $value['script_blocker_rules_raw'] ) );
 		}
 
 		return $sanitized;
