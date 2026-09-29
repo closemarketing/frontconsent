@@ -58,6 +58,7 @@ frontconsent/
 ### CSS
 - Admin settings CSS is plain CSS, scoped to `.frcn-settings-wrapper` — no build step.
 - Frontend banner CSS/JS ship as plain files in `assets/cookie-notice/` — no build step.
+- These plain files (`assets/cookie-notice/frontconsent-cookie-notice.js`/`.css`, `assets/admin/settings.js`/`.css`) are always the source of truth to edit directly. A separate, optional release step (`npm run build`, wired into the `.github/workflows/deploy.yml` tag deploy — see `bin/build-assets.js`) produces gitignored `.min.js`/`.min.css` build artifacts alongside them; `CookieNotice::get_asset_url()` / `Settings::get_asset_url()` enqueue the `.min.*` file when `SCRIPT_DEBUG` is off and it exists, falling back to the plain file otherwise. Never hand-edit a `.min.*` file.
 
 ### Naming: Brand Capitalization
 - Always write **FrontConsent** — capital F and C, one word, no space — in comments, docs, and user-facing strings. Never "Frontconsent", "Front Consent", or "frontconsent" in prose.
