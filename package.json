@@ -2,8 +2,14 @@
 	"name": "frontconsent",
 	"private": true,
 	"scripts": {
+		"build": "node bin/build-assets.js",
 		"test:cookie-notice": "node --test tests/js/cookie-notice-injection.test.js",
 		"test:settings-tabs": "node --test tests/js/settings-tabs.test.js",
+		"test:build-assets": "node --test tests/js/build-assets.test.js",
 		"test:js": "node --test tests/js/*.test.js"
+	},
+	"devDependencies": {
+		"clean-css": "^5.3.3",
+		"terser": "^5.36.0"
 	}
 }

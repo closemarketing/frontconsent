@@ -342,14 +342,14 @@ class CookieNotice {
 
 		wp_enqueue_style(
 			'frontconsent-cookie-notice',
-			FRCN_PLUGIN_URL . 'assets/cookie-notice/frontconsent-cookie-notice.css',
+			$this->get_asset_url( 'assets/cookie-notice/frontconsent-cookie-notice.css' ),
 			array(),
 			FRCN_VERSION
 		);
 
 		wp_enqueue_script(
 			'frontconsent-cookie-notice',
-			FRCN_PLUGIN_URL . 'assets/cookie-notice/frontconsent-cookie-notice.js',
+			$this->get_asset_url( 'assets/cookie-notice/frontconsent-cookie-notice.js' ),
 			array(),
 			FRCN_VERSION,
 			// Printed in <head>, not the footer: this is what lets the script's
@@ -383,6 +383,32 @@ class CookieNotice {
 				'homeUrl'        => home_url( '/' ),
 			)
 		);
+	}
+
+	/**
+	 * Build the URL for a plugin-relative CSS/JS asset, preferring its
+	 * minified `.min.css`/`.min.js` build artifact when one exists and
+	 * SCRIPT_DEBUG isn't forcing unminified assets — mirrors WordPress
+	 * core's own suffix convention. The `.min.*` files are release build
+	 * artifacts (see bin/build-assets.js, run by the deploy workflow), never
+	 * committed to `main` and never required for local development: a fresh
+	 * checkout that hasn't run the build simply falls back to the plain file.
+	 *
+	 * @param string $relative_path Plugin-relative path to the plain asset, e.g. 'assets/cookie-notice/frontconsent-cookie-notice.js'.
+	 * @return string Absolute URL to whichever asset should be enqueued.
+	 */
+	private function get_asset_url( $relative_path ) {
+		$use_minified = ! ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG );
+
+		if ( $use_minified ) {
+			$minified_relative_path = preg_replace( '/\.(css|js)$/', '.min.$1', $relative_path );
+
+			if ( file_exists( FRCN_PLUGIN_PATH . $minified_relative_path ) ) {
+				return FRCN_PLUGIN_URL . $minified_relative_path;
+			}
+		}
+
+		return FRCN_PLUGIN_URL . $relative_path;
 	}
 
 	/**
