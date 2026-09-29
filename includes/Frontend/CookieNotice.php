@@ -60,6 +60,19 @@ class CookieNotice {
 	const TRACKING_TYPES = array( 'gtm', 'ga4', 'clientify_analytics_plus', 'clientify_analytics_classic', 'brevo', 'openai_chatgpt_ads' );
 
 	/**
+	 * Consent category slugs this plugin's own binary accept/reject decision
+	 * applies to — the same two categories get_integration_default_category()
+	 * sorts every tracking integration into. Used to fan the visitor's single
+	 * decision out into a per-category 'frontconsent_consent_updated' action
+	 * (see fire_consent_updated_action()) for add-ons — e.g. the WP Consent
+	 * API integration — that expect per-category consent signals rather than
+	 * this plugin's own binary one.
+	 *
+	 * @var string[]
+	 */
+	const CONSENT_CATEGORIES = array( 'analytics', 'marketing' );
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -1192,6 +1205,7 @@ class CookieNotice {
 		}
 
 		$this->maybe_increment_stat( $decision );
+		$this->fire_consent_updated_action( $decision );
 
 		wp_send_json_success();
 	}
@@ -1252,9 +1266,46 @@ class CookieNotice {
 			$this->set_consent_cookie_header( $decision, time() + ( $days * DAY_IN_SECONDS ) );
 
 			$this->maybe_increment_stat( $decision );
+			$this->fire_consent_updated_action( $decision );
 		}
 
 		return $redirect;
+	}
+
+	/**
+	 * Fan a visitor's binary accept/reject decision out into a per-category
+	 * 'frontconsent_consent_updated' action, once per slug in
+	 * CONSENT_CATEGORIES — this plugin's own gating stays a plain binary
+	 * accept/reject, but add-ons (e.g. the WP Consent API integration, or
+	 * FrontConsent PRO's Advanced Cookie Management) expect a per-category
+	 * signal instead.
+	 *
+	 * Fired from both the AJAX (log_consent_callback()) and no-JS form
+	 * fallback (process_consent_form_submission()) decision paths, so an
+	 * add-on only ever needs to listen once regardless of how the visitor's
+	 * browser submitted the decision.
+	 *
+	 * @param string $decision 'accepted' or 'rejected'.
+	 * @return void
+	 */
+	private function fire_consent_updated_action( $decision ) {
+		$status = 'accepted' === $decision;
+
+		foreach ( self::CONSENT_CATEGORIES as $category ) {
+			/**
+			 * Fires after a visitor's consent decision is recorded for a category.
+			 *
+			 * FrontConsent Free only ever records one binary accept/reject
+			 * decision per visitor, applied here to every category in
+			 * CONSENT_CATEGORIES — a future per-category consent UI (e.g.
+			 * FrontConsent PRO's Advanced Cookie Management) would instead
+			 * fire this once per category with that category's own status.
+			 *
+			 * @param string $category Consent category slug, e.g. 'analytics' or 'marketing'.
+			 * @param bool   $status   True when consent was granted, false when denied.
+			 */
+			do_action( 'frontconsent_consent_updated', $category, $status );
+		}
 	}
 
 	/**
