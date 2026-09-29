@@ -128,20 +128,21 @@ class SettingsAssetMinificationTest extends TestCase {
 
 	/**
 	 * SCRIPT_DEBUG=true must force the plain files even when a .min.*
-	 * build artifact exists on disk. Runs in a separate process so
-	 * defining the SCRIPT_DEBUG constant here can't leak into any other
-	 * test in the suite.
-	 *
-	 * @runInSeparateProcess
+	 * build artifact exists on disk. Exercised via an anonymous subclass
+	 * overriding the protected is_script_debug() seam rather than actually
+	 * defining the SCRIPT_DEBUG constant, which (once defined) can't be
+	 * undefined again for the rest of the test process and would leak
+	 * into every other test.
 	 */
 	public function test_falls_back_to_plain_settings_assets_when_script_debug_is_on_even_if_minified_files_exist() {
-		if ( ! defined( 'SCRIPT_DEBUG' ) ) {
-			define( 'SCRIPT_DEBUG', true );
-		}
-
 		$this->create_fixture_min_files();
 
-		$this->settings->enqueue_assets( self::HOOK_SUFFIX );
+		$settings = new class() extends Settings {
+			protected function is_script_debug() {
+				return true;
+			}
+		};
+		$settings->enqueue_assets( self::HOOK_SUFFIX );
 
 		$script_src = wp_scripts()->registered['frontconsent-settings']->src;
 		$style_src  = wp_styles()->registered['frontconsent-settings']->src;

@@ -5,7 +5,9 @@
 		"build": "node bin/build-assets.js",
 		"test:cookie-notice": "node --test tests/js/cookie-notice-injection.test.js",
 		"test:settings-tabs": "node --test tests/js/settings-tabs.test.js",
+		"pretest:build-assets": "test -d node_modules || npm ci",
 		"test:build-assets": "node --test tests/js/build-assets.test.js",
+		"pretest:js": "test -d node_modules || npm ci",
 		"test:js": "node --test tests/js/*.test.js"
 	},
 	"devDependencies": {

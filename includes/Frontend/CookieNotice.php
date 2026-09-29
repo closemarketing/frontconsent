@@ -398,7 +398,7 @@ class CookieNotice {
 	 * @return string Absolute URL to whichever asset should be enqueued.
 	 */
 	private function get_asset_url( $relative_path ) {
-		$use_minified = ! ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG );
+		$use_minified = ! $this->is_script_debug();
 
 		if ( $use_minified ) {
 			$minified_relative_path = preg_replace( '/\.(css|js)$/', '.min.$1', $relative_path );
@@ -409,6 +409,20 @@ class CookieNotice {
 		}
 
 		return FRCN_PLUGIN_URL . $relative_path;
+	}
+
+	/**
+	 * Whether SCRIPT_DEBUG is on. Split out of get_asset_url() only so
+	 * tests can override this one method (e.g. via an anonymous subclass)
+	 * to exercise the SCRIPT_DEBUG=true branch — SCRIPT_DEBUG is a global
+	 * constant that, once defined, can't be undefined again for the rest
+	 * of the test process, which would otherwise leak into every other
+	 * test.
+	 *
+	 * @return bool
+	 */
+	protected function is_script_debug() {
+		return defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG;
 	}
 
 	/**
