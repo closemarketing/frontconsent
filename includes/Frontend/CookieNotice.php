@@ -383,6 +383,20 @@ class CookieNotice {
 				'homeUrl'        => home_url( '/' ),
 			)
 		);
+
+		// Separate localized object (not merged into frcnCookieNotice above)
+		// so an add-on overriding one doesn't have to know about the other —
+		// these are purely the strings the live region announcer in
+		// frontconsent-cookie-notice.js reads (see render_status_announcer()).
+		wp_localize_script(
+			'frontconsent-cookie-notice',
+			'frcnCookieNoticeA11y',
+			array(
+				'bannerOpened' => __( 'Cookie consent banner opened.', 'frontconsent' ),
+				'accepted'     => __( 'Cookies accepted.', 'frontconsent' ),
+				'rejected'     => __( 'Cookies rejected.', 'frontconsent' ),
+			)
+		);
 	}
 
 	/**
@@ -406,6 +420,31 @@ class CookieNotice {
 		}
 
 		$this->render_reopen_trigger();
+		$this->render_status_announcer();
+	}
+
+	/**
+	 * Render an always-present, visually hidden live region used to announce
+	 * banner visibility and consent-decision state changes to screen reader
+	 * users (see frontconsent-cookie-notice.js's announce() helper) — a purely
+	 * visual class/opacity change (how the banner itself is shown/hidden)
+	 * conveys nothing to assistive technology on its own.
+	 *
+	 * Printed empty and unconditionally, exactly like render_reopen_trigger():
+	 * JS fills in its text at the moments that matter, keeping this cache-neutral.
+	 *
+	 * @return void
+	 */
+	private function render_status_announcer() {
+		?>
+		<div
+			id="frcn-cookie-notice-announcer"
+			class="frcn-cookie-notice-sr-only"
+			role="status"
+			aria-live="polite"
+			aria-atomic="true"
+		></div>
+		<?php
 	}
 
 	/**
@@ -513,10 +552,11 @@ class CookieNotice {
 			role="<?php echo $is_modal ? 'dialog' : 'region'; ?>"
 			<?php echo $is_modal ? 'aria-modal="true"' : ''; ?>
 			aria-label="<?php echo esc_attr__( 'Cookie consent', 'frontconsent' ); ?>"
+			aria-describedby="frcn-cookie-notice-message"
 		>
 			<div class="frcn-cookie-notice__panel">
 				<span class="frcn-cookie-notice__icon" aria-hidden="true"></span>
-				<p class="frcn-cookie-notice__message">
+				<p class="frcn-cookie-notice__message" id="frcn-cookie-notice-message">
 					<?php
 					echo esc_html( $message );
 
