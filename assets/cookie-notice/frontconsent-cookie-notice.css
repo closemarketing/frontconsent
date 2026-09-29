@@ -293,9 +293,29 @@ body.frcn-cookie-notice-lock-scroll {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.frcn-cookie-notice {
+	.frcn-cookie-notice,
+	.frcn-cookie-notice__button,
+	.frcn-cookie-reopen {
 		transition: none;
 	}
+}
+
+/*
+ * Visually hidden but still exposed to assistive technology — used by the
+ * live region in CookieNotice::render_status_announcer() so screen readers
+ * hear the banner-visibility and consent-decision announcements without
+ * anything sighted visitors need to see.
+ */
+.frcn-cookie-notice-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 /*

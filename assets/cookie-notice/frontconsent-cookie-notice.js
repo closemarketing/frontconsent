@@ -310,6 +310,16 @@
 			return;
 		}
 
+		// Falls back to plain English if the localized strings object is
+		// missing for any reason (e.g. an add-on/theme prints its own copy of
+		// this file without going through enqueue_assets()) — the live
+		// region should still say *something* rather than stay silent.
+		var i18n = typeof frcnCookieNoticeA11y !== 'undefined' ? frcnCookieNoticeA11y : {
+			bannerOpened: 'Cookie consent banner opened.',
+			accepted: 'Cookies accepted.',
+			rejected: 'Cookies rejected.'
+		};
+
 		requestTrackingIfNeeded();
 		setUpReopenTrigger();
 
@@ -328,6 +338,20 @@
 		var rejectBtn = banner.querySelector('[data-frcn-cookie-action="reject"]');
 		var isPopup = banner.classList.contains('frcn-cookie-notice--popup');
 		var previouslyFocused = document.activeElement;
+		var announcer = document.getElementById('frcn-cookie-notice-announcer');
+
+		/**
+		 * Push a message into the always-present live region (see
+		 * CookieNotice::render_status_announcer()) so a screen reader user
+		 * hears the banner appearing and any later consent-decision state
+		 * change — a purely visual reveal/hide, or the accepted/rejected
+		 * cookie being set, otherwise conveys nothing to them.
+		 */
+		function announce(message) {
+			if (announcer) {
+				announcer.textContent = message;
+			}
+		}
 
 		revealBanner();
 
@@ -383,26 +407,39 @@
 			window.setTimeout(function () {
 				banner.classList.remove('frcn-cookie-notice--init');
 
+				// Non-modal layouts (bar/box) deliberately never move focus —
+				// per WAI-ARIA Authoring Practices, an unsolicited focus grab
+				// on every single page load is more disruptive to a screen
+				// reader/keyboard user than helpful; the live-region
+				// announcement below is what tells them it appeared instead,
+				// leaving focus exactly where they left it.
+				announce(i18n.bannerOpened);
+
 				if (isPopup) {
 					document.body.classList.add('frcn-cookie-notice-lock-scroll');
 
+					// A true modal (the popup layout blocks the rest of the
+					// page) must move focus into itself on open — the first
+					// focusable control is the reject button in DOM order,
+					// but the accept button is used here to keep the
+					// pre-existing default behavior/tests unchanged.
 					if (acceptBtn) {
 						acceptBtn.focus({ preventScroll: true });
 					}
 
-					document.addEventListener('keydown', trapFocus);
+					document.addEventListener('keydown', handleModalKeydown);
 				}
 			}, delay);
 		}
 
-		function trapFocus(event) {
-			if (event.key !== 'Tab') {
-				return;
-			}
-
-			var focusable = Array.prototype.slice.call(
-				banner.querySelectorAll('a[href], button')
+		function getFocusableElements() {
+			return Array.prototype.slice.call(
+				banner.querySelectorAll('a[href], button, input, [tabindex]:not([tabindex="-1"])')
 			);
+		}
+
+		function trapFocus(event) {
+			var focusable = getFocusableElements();
 
 			if (!focusable.length) {
 				return;
@@ -420,6 +457,23 @@
 			}
 		}
 
+		/**
+		 * Keydown handler bound only while the popup (true modal) layout is
+		 * open: Tab/Shift+Tab loop within the dialog's own focusable elements
+		 * (trapFocus()) and Escape is treated as an explicit reject — a valid,
+		 * equivalent consent decision, not a silent dismissal — so a keyboard
+		 * user always has a way out that doesn't just abandon the dialog
+		 * without a decision being recorded (see handleDecision()).
+		 */
+		function handleModalKeydown(event) {
+			if (event.key === 'Tab') {
+				trapFocus(event);
+			} else if (event.key === 'Escape' || event.key === 'Esc') {
+				event.preventDefault();
+				handleDecision('rejected');
+			}
+		}
+
 		var decided = false;
 
 		function handleDecision(decision) {
@@ -431,6 +485,7 @@
 
 			setConsentCookie(decision);
 			updateConsentMode(decision);
+			announce(decision === 'accepted' ? i18n.accepted : i18n.rejected);
 			hideBanner();
 			setUpReopenTrigger();
 			dispatchConsentEvent(decision);
@@ -467,7 +522,7 @@
 		function hideBanner() {
 			banner.classList.add('frcn-cookie-notice--hidden');
 			document.body.classList.remove('frcn-cookie-notice-lock-scroll');
-			document.removeEventListener('keydown', trapFocus);
+			document.removeEventListener('keydown', handleModalKeydown);
 
 			if (isPopup && previouslyFocused && typeof previouslyFocused.focus === 'function') {
 				previouslyFocused.focus({ preventScroll: true });
