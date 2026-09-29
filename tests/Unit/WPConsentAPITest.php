@@ -152,6 +152,12 @@ class WPConsentAPITest extends TestCase {
 	 * classes together via that action (as Plugin_Main does) must result in
 	 * one wp_set_consent() call per category.
 	 *
+	 * Goes through process_consent_form_submission() (the no-JS <form>
+	 * fallback's own decision path) rather than the AJAX log_consent_callback(),
+	 * which calls wp_send_json_success() -> wp_die() and is not safe to run
+	 * inside this test's @runInSeparateProcess child process. Both paths call
+	 * the same fire_consent_updated_action() this test cares about.
+	 *
 	 * @runInSeparateProcess
 	 * @preserveGlobalState disabled
 	 */
@@ -161,19 +167,11 @@ class WPConsentAPITest extends TestCase {
 		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
 		$cookie_notice = new CookieNotice();
 
-		$_POST['nonce']    = wp_create_nonce( CookieNotice::NONCE_ACTION );
-		$_POST['decision'] = 'accepted';
+		$_POST['frcn_decision'] = 'accepted';
 
-		try {
-			$cookie_notice->log_consent_callback();
-		} catch ( \WPDieException $exception ) {
-			// wp_send_json_success() calls wp_die() under the test suite; the
-			// consent-sync side effect this test cares about already ran
-			// before that point.
-			unset( $exception );
-		}
+		$cookie_notice->process_consent_form_submission();
 
-		unset( $_POST['nonce'], $_POST['decision'] );
+		unset( $_POST['frcn_decision'] );
 		delete_option( 'frontconsent_settings' );
 
 		$this->assertContains( array( 'wp_set_consent', 'statistics', 'allow' ), self::$calls );
