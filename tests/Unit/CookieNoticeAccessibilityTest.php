@@ -59,9 +59,17 @@ class CookieNoticeAccessibilityTest extends TestCase {
 
 		$html = $this->render_banner_html();
 
-		$this->assertStringContainsString( 'role="region"', $html );
-		$this->assertStringNotContainsString( 'role="dialog"', $html );
-		$this->assertStringNotContainsString( 'aria-modal', $html );
+		// Scoped to the banner element itself: the cookie preferences panel
+		// (a separate, always-present dialog — see
+		// CookieNotice::render_preferences_panel()) legitimately carries
+		// role="dialog"/aria-modal regardless of the banner's own layout, so
+		// asserting over the whole wp_footer output would wrongly fail here.
+		$banner_end  = strpos( $html, 'id="frcn-cookie-reopen"' );
+		$banner_html = substr( $html, 0, $banner_end );
+
+		$this->assertStringContainsString( 'role="region"', $banner_html );
+		$this->assertStringNotContainsString( 'role="dialog"', $banner_html );
+		$this->assertStringNotContainsString( 'aria-modal', $banner_html );
 	}
 
 	/**
