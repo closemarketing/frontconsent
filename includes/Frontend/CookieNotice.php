@@ -488,7 +488,7 @@ class CookieNotice {
 	}
 
 	/**
-	 * Render the persistent "Cookie preferences" trigger that lets a visitor
+	 * Render the persistent cookie-preferences trigger that lets a visitor
 	 * who already decided open the banner again to change their mind — the
 	 * only way to withdraw acceptance or replace a rejection without deleting
 	 * the consent cookie by hand. Always printed (including on the policy
@@ -496,17 +496,33 @@ class CookieNotice {
 	 * only once a decision cookie actually exists, the same cache-neutral
 	 * approach render_banner_markup() itself uses.
 	 *
+	 * Icon-only by design: it reuses the exact same cookie glyph shown inside
+	 * the banner itself (.frcn-cookie-notice__icon), rather than a text label,
+	 * so it reads as a small recognizable affordance rather than a chunk of
+	 * text competing for attention on every page. The accessible name comes
+	 * entirely from aria-label.
+	 *
 	 * @return void
 	 */
 	private function render_reopen_trigger() {
+		$options = get_option( 'frontconsent_settings', array() );
+		$color   = (string) ( $options['cookie_notice_color'] ?? '#687df9' );
+		$style   = sprintf(
+			'--frcn-cookie-accent: %1$s; --frcn-cookie-accent-contrast: %2$s; --frcn-cookie-icon-url: url(%3$s);',
+			esc_attr( $color ),
+			esc_attr( $this->get_readable_text_color( $color ) ),
+			esc_attr( FRCN_PLUGIN_URL . 'assets/cookie-notice/cookie-icon.svg' )
+		);
 		?>
 		<button
 			type="button"
 			id="frcn-cookie-reopen"
 			class="frcn-cookie-reopen"
+			style="<?php echo esc_attr( $style ); ?>"
+			aria-label="<?php echo esc_attr__( 'Cookie preferences', 'frontconsent' ); ?>"
 			hidden
 		>
-			<?php echo esc_html__( 'Cookie preferences', 'frontconsent' ); ?>
+			<span class="frcn-cookie-notice__icon" aria-hidden="true"></span>
 		</button>
 		<?php
 	}
@@ -601,7 +617,10 @@ class CookieNotice {
 					echo esc_html( $message );
 
 					if ( $policy_url ) {
-						echo ' <a href="' . esc_url( $policy_url ) . '" class="frcn-cookie-notice__link" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Learn more', 'frontconsent' ) . '</a>';
+						$policy_title = $policy_page_id ? get_the_title( $policy_page_id ) : '';
+						$link_text    = '' !== $policy_title ? $policy_title : __( 'Learn more', 'frontconsent' );
+
+						echo ' <a href="' . esc_url( $policy_url ) . '" class="frcn-cookie-notice__link" target="_blank" rel="noopener noreferrer">' . esc_html( $link_text ) . '</a>';
 					}
 					?>
 				</p>
