@@ -39,12 +39,15 @@ Fires inside the cookie preferences panel (`#frcn-cookie-preferences`),
 right after the static, always-on "Strictly necessary" section and before the
 Reject all / Save changes / Accept all buttons.
 
-FrontConsent PRO hooks here to render its own per-category toggles (e.g.
-Preferences, Analytics, Marketing), each with a description and, optionally,
-its cookie list. Nothing is printed here in the Free tier — without PRO (or
-any other add-on) active, only the static "Strictly necessary" block is
-shown, per the issue's requirement that no disabled/teaser UI clutters the
-panel by default.
+FrontConsent PRO hooks here to render its own additional per-category toggles
+(e.g. Preferences), each with a description and, optionally, its cookie list.
+Nothing is printed on this specific action in the Free tier — the Free
+tier's own two built-in toggles (Analytics, Marketing; see "The Free tier's
+own built-in categories" below) are rendered directly in
+`render_preferences_panel()`, before this action fires, not through it —
+without PRO (or any other add-on) active, nothing *extra* is added beyond
+those two, per the issue's requirement that no disabled/teaser UI clutters
+the panel by default.
 
 **Contract for anything hooked here:** any toggle intended to be read back by
 "Save changes" must be a checkable control (e.g. `<input type="checkbox">`)
@@ -129,6 +132,48 @@ add_filter( 'frcn_cookie_consent_categories', function ( $categories, $decision 
 	return $categories;
 }, 10, 2 );
 ```
+
+## The Free tier's own built-in categories: Analytics and Marketing
+
+The Free tier ships two real, independently-controllable toggles in the
+panel — `data-frcn-category="analytics"` and `data-frcn-category="marketing"`
+— not a single combined checkbox, because they gate genuinely different
+integrations (see `CookieNotice::get_integration_default_category()`: GTM/GA4
+default to `'analytics'`; Clientify/Brevo/OpenAI ads default to
+`'marketing'`). Unchecking one and leaving the other checked actually changes
+what loads on the next page load, not just what the panel displays.
+
+This is wired end to end without any PRO add-on:
+
+1. `frontconsent-cookie-notice.js`'s `collectPreferencesCategories()` reads
+   both toggles' checked state on Save changes / Accept all / Reject all.
+2. `setCategoriesCookie()` persists that selection into its own cookie —
+   `frontconsent_categories` (or `frontconsent_categories_<blog_id>` on
+   multisite — see `CookieNotice::get_categories_cookie_name()`) — as JSON,
+   e.g. `{"analytics":true,"marketing":false}`. It's written with the same
+   path/max-age/`SameSite=Lax` conventions as the existing binary consent
+   cookie, just under a different name, and is sent to the server
+   automatically via the normal cookie header (no new AJAX plumbing needed).
+3. `CookieNotice::get_config_callback()` reads that cookie server-side
+   (`get_allowed_categories_default()`), JSON-decodes it defensively (never
+   fatals on malformed/tampered input), and uses it to build the real
+   `allowedCategories` map returned to the frontend — still run through the
+   existing `frcn_cookie_notice_allowed_tracking_categories` filter, so a PRO
+   add-on can still override it.
+4. `frcnCookieNoticeInject()` (in the registered script and its inline
+   wp_head bootstrap copy) was already able to gate on a real
+   `allowedCategories` map — this only had to stop being permanently `null`
+   in the Free tier.
+
+**Backward compatibility:** a visitor who already accepted before this
+per-category cookie existed has no `frontconsent_categories` cookie yet.
+Previously `'accepted'` meant everything loaded (`allowedCategories` was
+always `null`, i.e. allow-all) — so a missing or unparseable/tampered
+categories cookie falls back to allowing both known categories for an
+already-accepted visitor, never regressing them to losing tracking they
+already consented to. Granular blocking only starts once a visitor has
+actually gone through the panel and this cookie exists with real per-category
+data.
 
 ## Client-side: `frontconsent-cookie-notice.js`
 

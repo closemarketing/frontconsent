@@ -52,10 +52,36 @@ function createEnvironment(options = {}) {
 		querySelector() { return null; },
 		querySelectorAll() { return []; }
 	};
+	// An accumulating cookie jar (real browsers merge each
+	// `document.cookie = "name=value; attrs..."` assignment into the
+	// existing set rather than replacing it wholesale) — handleDecision()
+	// now writes both the binary consent cookie and the per-category cookie
+	// for a single decision, and both must be readable afterwards.
+	const cookieJar = {};
+
+	(options.cookie || '').split(';').forEach((pair) => {
+		const index = pair.indexOf('=');
+
+		if (index > -1) {
+			cookieJar[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
+		}
+	});
+
 	const document = {
 		activeElement: null,
 		body: { classList: { add() {}, remove() {} } },
-		cookie: options.cookie || '',
+		get cookie() {
+			return Object.keys(cookieJar).map((name) => `${name}=${cookieJar[name]}`).join('; ');
+		},
+		set cookie(value) {
+			const index = value.indexOf('=');
+
+			if (index === -1) {
+				return;
+			}
+
+			cookieJar[value.slice(0, index).trim()] = value.slice(index + 1).split(';')[0];
+		},
 		head: { appendChild(script) { scripts.push(script); } },
 		readyState: 'loading',
 		addEventListener(event, callback) { listeners[event] = callback; },
@@ -107,6 +133,7 @@ function createEnvironment(options = {}) {
 		frcnCookieNotice: {
 			ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
 			cookieName: 'frcn_cookie_consent',
+			categoriesCookieName: 'frontconsent_categories',
 			cookiePath: '/',
 			expirationDays: 365,
 			isPolicyPage: options.isPolicyPage || '',

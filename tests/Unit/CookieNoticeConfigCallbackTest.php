@@ -35,7 +35,7 @@ class CookieNoticeConfigCallbackTest extends TestCase {
 	public function tear_down() {
 		remove_filter( 'wp_die_ajax_handler', array( $this, 'get_die_handler' ) );
 		remove_filter( 'wp_doing_ajax', '__return_true' );
-		unset( $_COOKIE['frcn_cookie_consent'] );
+		unset( $_COOKIE['frcn_cookie_consent'], $_COOKIE['frontconsent_categories'] );
 		delete_option( 'frontconsent_settings' );
 		parent::tear_down();
 	}
@@ -172,5 +172,113 @@ class CookieNoticeConfigCallbackTest extends TestCase {
 		$this->assertSame( 'GTM-ABC1234', $response['data']['gtmId'] );
 
 		delete_option( 'googlesitekit_tagmanager_settings' );
+	}
+
+	/**
+	 * A well-formed frontconsent_categories cookie is decoded and drives
+	 * allowedCategories exactly — this is the real, functionally meaningful
+	 * gate: analytics allowed, marketing denied.
+	 */
+	public function test_allowed_categories_reflect_a_well_formed_categories_cookie() {
+		$_COOKIE['frontconsent_categories'] = wp_json_encode(
+			array(
+				'analytics' => true,
+				'marketing' => false,
+			)
+		);
+
+		$response = $this->get_config();
+
+		$this->assertSame(
+			array(
+				'analytics' => true,
+				'marketing' => false,
+			),
+			$response['data']['allowedCategories']
+		);
+	}
+
+	/**
+	 * Backward compatibility: a visitor who already accepted before this
+	 * per-category cookie existed has no frontconsent_categories cookie at
+	 * all. They must not be regressed to losing already-loaded tracking —
+	 * allowedCategories falls back to allowing both known categories, the
+	 * same "accepted = everything loads" reality as before this feature.
+	 */
+	public function test_allowed_categories_default_to_both_allowed_when_no_categories_cookie_exists_but_binary_consent_is_accepted() {
+		unset( $_COOKIE['frontconsent_categories'] );
+
+		$response = $this->get_config();
+
+		$this->assertSame(
+			array(
+				'analytics' => true,
+				'marketing' => true,
+			),
+			$response['data']['allowedCategories']
+		);
+	}
+
+	/**
+	 * A malformed/tampered categories cookie (invalid JSON, or valid JSON
+	 * that isn't an object/array) must never fatal or warn — it falls back
+	 * to the exact same safe default as no cookie at all.
+	 */
+	public function test_malformed_categories_cookie_falls_back_to_the_same_default_as_no_cookie() {
+		$_COOKIE['frontconsent_categories'] = 'not-valid-json{{{';
+
+		$response = $this->get_config();
+
+		$this->assertSame(
+			array(
+				'analytics' => true,
+				'marketing' => true,
+			),
+			$response['data']['allowedCategories']
+		);
+
+		$_COOKIE['frontconsent_categories'] = wp_json_encode( 'a plain string, not an object' );
+
+		$response = $this->get_config();
+
+		$this->assertSame(
+			array(
+				'analytics' => true,
+				'marketing' => true,
+			),
+			$response['data']['allowedCategories']
+		);
+	}
+
+	/**
+	 * A rejected binary consent must keep short-circuiting before any of the
+	 * category-reading logic even matters for the tracking payload itself —
+	 * confirms the existing $has_tracking_consent gate stays intact: no GTM/
+	 * GA4 id and no tracking integrations are ever returned for a rejected
+	 * visitor, regardless of what the categories cookie says.
+	 */
+	public function test_rejected_binary_consent_still_gates_tracking_payload_regardless_of_categories_cookie() {
+		$_COOKIE['frcn_cookie_consent']     = 'rejected';
+		$_COOKIE['frontconsent_categories'] = wp_json_encode(
+			array(
+				'analytics' => true,
+				'marketing' => true,
+			)
+		);
+
+		update_option(
+			'frontconsent_settings',
+			array(
+				'enable_cookie_notice'                => true,
+				'cookie_notice_tracking_integrations' => array(
+					array( 'type' => 'gtm', 'id' => 'GTM-ABC1234' ),
+				),
+			)
+		);
+
+		$response = $this->get_config();
+
+		$this->assertSame( '', $response['data']['gtmId'] );
+		$this->assertSame( array(), $response['data']['trackingIntegrations'] );
 	}
 }

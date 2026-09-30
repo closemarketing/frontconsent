@@ -79,9 +79,9 @@ class CookieNoticePreferencesPanelTest extends TestCase {
 	public function test_customize_button_appears_before_reject_and_accept() {
 		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
 
-		$html            = $this->render_banner_html();
-		$customize_pos   = strpos( $html, 'data-frcn-cookie-action="customize"' );
-		$reject_pos      = strpos( $html, 'data-frcn-cookie-action="reject"' );
+		$html          = $this->render_banner_html();
+		$customize_pos = strpos( $html, 'data-frcn-cookie-action="customize"' );
+		$reject_pos    = strpos( $html, 'data-frcn-cookie-action="reject"' );
 
 		$this->assertNotFalse( $customize_pos );
 		$this->assertNotFalse( $reject_pos );
@@ -197,16 +197,19 @@ class CookieNoticePreferencesPanelTest extends TestCase {
 	}
 
 	/**
-	 * With no add-on hooked in (Free, or PRO inactive), nothing extra is
-	 * rendered beyond the static necessary section — no category UI leaks
-	 * through by default.
+	 * With no add-on hooked in (Free, or PRO inactive), the panel shows
+	 * exactly its own two built-in category toggles (analytics, marketing)
+	 * and nothing else — no additional PRO-style category UI leaks through
+	 * by default via the frcn_cookie_preferences_categories extension point.
 	 */
-	public function test_no_category_ui_is_rendered_without_an_add_on() {
+	public function test_no_extra_category_ui_is_rendered_without_an_add_on() {
 		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
 
 		$html = $this->render_banner_html();
 
-		$this->assertStringNotContainsString( 'data-frcn-category', $html );
+		preg_match_all( '/data-frcn-category="([^"]+)"/', $html, $matches );
+
+		$this->assertSame( array( 'analytics', 'marketing' ), $matches[1] );
 	}
 
 	/**
@@ -295,32 +298,45 @@ class CookieNoticePreferencesPanelTest extends TestCase {
 	}
 
 	/**
-	 * Without a real toggle, the panel looks identical no matter what Accept
-	 * all/Reject all/Save changes did — a visitor gets no visible
-	 * confirmation of the effect of their choice. The Free tier ships one
-	 * real, native checkbox (data-frcn-category="optional") that
-	 * frontconsent-cookie-notice.js syncs from the actual consent cookie on
-	 * every open and reads back on Save changes/Accept all, so the panel
-	 * always reflects what was actually recorded.
+	 * Without real, independent toggles, the panel looks identical no matter
+	 * what Accept all/Reject all/Save changes did — a visitor gets no visible
+	 * confirmation of the effect of their choice, and (per the "analytics y
+	 * marketing son diferentes" feedback) a single combined checkbox would
+	 * misleadingly promise granularity it doesn't have. The Free tier ships
+	 * two real, native, independently-checkable checkboxes —
+	 * data-frcn-category="analytics" and data-frcn-category="marketing" —
+	 * that frontconsent-cookie-notice.js syncs from the frontconsent_categories
+	 * cookie on every open and reads back on Save changes/Accept all, so the
+	 * panel always reflects what was actually recorded per category.
 	 */
-	public function test_panel_includes_a_real_optional_category_toggle() {
+	public function test_panel_includes_real_analytics_and_marketing_category_toggles() {
 		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
 
 		$html = $this->render_banner_html();
 
 		$this->assertMatchesRegularExpression(
-			'/<input[^>]*type="checkbox"[^>]*data-frcn-category="optional"/',
+			'/<input[^>]*type="checkbox"[^>]*data-frcn-category="analytics"/',
 			$html
 		);
-		$this->assertStringContainsString( 'Analytics &amp; Marketing', $html );
+		$this->assertMatchesRegularExpression(
+			'/<input[^>]*type="checkbox"[^>]*data-frcn-category="marketing"/',
+			$html
+		);
+		$this->assertStringContainsString( 'Analytics', $html );
+		$this->assertStringContainsString( 'Marketing', $html );
+		$this->assertStringNotContainsString( 'data-frcn-category="optional"', $html );
+		$this->assertStringNotContainsString( 'Analytics &amp; Marketing', $html );
 
 		// Must appear after the static necessary block and before the PRO
 		// extension point, matching where render_preferences_panel() prints it.
 		$necessary_pos = strpos( $html, 'frcn-cookie-preferences__category--necessary' );
-		$toggle_pos     = strpos( $html, 'data-frcn-category="optional"' );
+		$analytics_pos = strpos( $html, 'data-frcn-category="analytics"' );
+		$marketing_pos = strpos( $html, 'data-frcn-category="marketing"' );
 
 		$this->assertNotFalse( $necessary_pos );
-		$this->assertNotFalse( $toggle_pos );
-		$this->assertGreaterThan( $necessary_pos, $toggle_pos );
+		$this->assertNotFalse( $analytics_pos );
+		$this->assertNotFalse( $marketing_pos );
+		$this->assertGreaterThan( $necessary_pos, $analytics_pos );
+		$this->assertGreaterThan( $analytics_pos, $marketing_pos );
 	}
 }

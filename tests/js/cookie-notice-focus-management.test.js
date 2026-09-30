@@ -95,6 +95,22 @@ function createEnvironment(options) {
 	var panelSaveBtn = createElement('panel-save');
 	var panelFocusable = [panelCloseBtn, panelAcceptBtn, panelRejectBtn, panelSaveBtn];
 
+	// The two real, independent category checkboxes (see issue: "analytics y
+	// marketing son diferentes") — a plain object stub is enough since only
+	// .checked and .getAttribute('data-frcn-category') are ever read/set.
+	var categoryToggles = options.categoryToggles || [
+		{ category: 'analytics', checked: false },
+		{ category: 'marketing', checked: false }
+	];
+	var categoryToggleElements = categoryToggles.map(function (toggle) {
+		return {
+			checked: toggle.checked,
+			getAttribute(name) {
+				return 'data-frcn-category' === name ? toggle.category : null;
+			}
+		};
+	});
+
 	var preferencesPanel = {
 		hidden: true,
 		classList: { add() {}, remove() {}, contains() { return false; } },
@@ -115,16 +131,45 @@ function createEnvironment(options) {
 		},
 		querySelectorAll(selector) {
 			if ('[data-frcn-category]' === selector) {
-				return [];
+				return categoryToggleElements;
 			}
 			return panelFocusable;
 		}
 	};
 
+	// A minimal accumulating cookie jar (real browsers merge each
+	// `document.cookie = "name=value; attrs..."` assignment into the
+	// existing set rather than replacing it wholesale) — needed now that
+	// handleDecision() writes both the binary consent cookie and the new
+	// per-category cookie in the same decision, and tests need to read both
+	// back independently afterwards.
+	var cookieJar = {};
+
+	(options.cookie || '').split(';').forEach(function (pair) {
+		var index = pair.indexOf('=');
+
+		if (index > -1) {
+			cookieJar[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
+		}
+	});
+
 	document = {
 		activeElement: triggerEl,
 		body: { classList: { add() {}, remove() {} } },
-		cookie: options.cookie || '',
+		get cookie() {
+			return Object.keys(cookieJar).map(function (name) {
+				return name + '=' + cookieJar[name];
+			}).join('; ');
+		},
+		set cookie(value) {
+			var index = value.indexOf('=');
+
+			if (index === -1) {
+				return;
+			}
+
+			cookieJar[value.slice(0, index).trim()] = value.slice(index + 1).split(';')[0];
+		},
 		head: { appendChild() {} },
 		readyState: 'loading',
 		_domListeners: {},
@@ -182,6 +227,7 @@ function createEnvironment(options) {
 		frcnCookieNotice: {
 			ajaxUrl: 'https://example.test/wp-admin/admin-ajax.php',
 			cookieName: 'frcn_cookie_consent',
+			categoriesCookieName: 'frontconsent_categories',
 			cookiePath: '/',
 			expirationDays: 365,
 			isPolicyPage: '',
@@ -216,6 +262,7 @@ function createEnvironment(options) {
 	return {
 		acceptBtn,
 		announcer,
+		categoryToggleElements,
 		context,
 		customizeBtn,
 		fireModalKeydown,
@@ -391,7 +438,121 @@ test('Save changes with nothing else to opt into records the same rejection the 
 	var env = createEnvironment({ cookie: 'frcn_cookie_consent=accepted' });
 
 	env.reopenBtn.dispatchEvent({ type: 'click' });
+
+	// Opening the panel with an 'accepted' binary cookie and no categories
+	// cookie yet checks both toggles by default (backward compatibility —
+	// see syncPreferencesToggles()); simulate the visitor explicitly
+	// unchecking both before saving, i.e. genuinely "nothing else to opt into".
+	env.categoryToggleElements.forEach(function (toggle) {
+		toggle.checked = false;
+	});
+
 	env.panelSaveBtn.dispatchEvent({ type: 'click' });
 
 	assert.ok(/frcn_cookie_consent=rejected/.test(document.cookie));
+});
+
+/**
+ * Tests for the real, independent Analytics/Marketing category split
+ * (analytics y marketing son diferentes) — the frontconsent_categories
+ * cookie and syncPreferencesToggles()/collectPreferencesCategories() must
+ * treat each category on its own, not as two cosmetic mirrors of one flag.
+ */
+
+function readStoredCategories() {
+	var match = /frontconsent_categories=([^;]*)/.exec(document.cookie);
+
+	if (!match) {
+		return null;
+	}
+
+	return JSON.parse(decodeURIComponent(match[1]));
+}
+
+test('opening the panel with a categories cookie present sets each checkbox independently, not both mirroring one flag', () => {
+	var env = createEnvironment({
+		cookie: 'frcn_cookie_consent=accepted; frontconsent_categories=' +
+			encodeURIComponent(JSON.stringify({ analytics: true, marketing: false }))
+	});
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+
+	var analyticsToggle = env.categoryToggleElements[0];
+	var marketingToggle = env.categoryToggleElements[1];
+
+	assert.equal(analyticsToggle.checked, true);
+	assert.equal(marketingToggle.checked, false);
+});
+
+test('opening the panel with no categories cookie but an accepted binary cookie checks both (backward compatibility)', () => {
+	var env = createEnvironment({ cookie: 'frcn_cookie_consent=accepted' });
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+
+	var analyticsToggle = env.categoryToggleElements[0];
+	var marketingToggle = env.categoryToggleElements[1];
+
+	assert.equal(analyticsToggle.checked, true);
+	assert.equal(marketingToggle.checked, true);
+});
+
+test('opening the panel with no categories cookie and no/rejected binary cookie leaves both unchecked', () => {
+	var env = createEnvironment({ cookie: '' });
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+
+	var analyticsToggle = env.categoryToggleElements[0];
+	var marketingToggle = env.categoryToggleElements[1];
+
+	assert.equal(analyticsToggle.checked, false);
+	assert.equal(marketingToggle.checked, false);
+});
+
+test('clicking Save changes with only Analytics checked persists {necessary: true, analytics: true, marketing: false}', () => {
+	var env = createEnvironment({ cookie: 'frcn_cookie_consent=accepted' });
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+
+	// Simulate the visitor's actual click: opening the panel checks both by
+	// default here (backward-compat fallback, no categories cookie yet) —
+	// then they explicitly uncheck Marketing while leaving Analytics checked.
+	env.categoryToggleElements[0].checked = true;
+	env.categoryToggleElements[1].checked = false;
+
+	env.panelSaveBtn.dispatchEvent({ type: 'click' });
+
+	// Only Analytics is checked, so the binary decision this implies is
+	// still 'accepted' (at least one non-necessary category is on).
+	assert.ok(/frcn_cookie_consent=accepted/.test(document.cookie));
+	assert.deepEqual(readStoredCategories(), { necessary: true, analytics: true, marketing: false });
+});
+
+test('Reject all explicitly persists {necessary: true, analytics: false, marketing: false}', () => {
+	var env = createEnvironment({
+		cookie: 'frcn_cookie_consent=accepted',
+		categoryToggles: [
+			{ category: 'analytics', checked: true },
+			{ category: 'marketing', checked: true }
+		]
+	});
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+	env.panelRejectBtn.dispatchEvent({ type: 'click' });
+
+	assert.deepEqual(readStoredCategories(), { necessary: true, analytics: false, marketing: false });
+});
+
+test('Accept all persists both categories as true regardless of their prior checked state', () => {
+	var env = createEnvironment({
+		cookie: 'frcn_cookie_consent=accepted',
+		categoryToggles: [
+			{ category: 'analytics', checked: false },
+			{ category: 'marketing', checked: false }
+		]
+	});
+
+	env.reopenBtn.dispatchEvent({ type: 'click' });
+	env.panelAcceptBtn.dispatchEvent({ type: 'click' });
+
+	assert.deepEqual(readStoredCategories(), { necessary: true, analytics: true, marketing: true });
 });

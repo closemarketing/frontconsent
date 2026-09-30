@@ -241,6 +241,29 @@ class CookieNotice {
 	}
 
 	/**
+	 * Name of the cookie storing the visitor's actual per-category selection
+	 * (e.g. `{"analytics":true,"marketing":false}`), written client-side by
+	 * frontconsent-cookie-notice.js right alongside the binary consent cookie
+	 * (see get_cookie_name()) whenever a decision is recorded from the
+	 * preferences panel. Sent to the server automatically on every request
+	 * via the normal cookie header, which is what lets get_config_callback()
+	 * build a real allowedCategories map without any new AJAX plumbing.
+	 *
+	 * Named and scoped the same multisite-aware way as get_cookie_name() —
+	 * see that method's own docblock for why the blog ID has to be folded
+	 * into the name itself rather than relying on COOKIEPATH.
+	 *
+	 * @return string
+	 */
+	private function get_categories_cookie_name() {
+		if ( is_multisite() ) {
+			return 'frontconsent_categories_' . get_current_blog_id();
+		}
+
+		return 'frontconsent_categories';
+	}
+
+	/**
 	 * Get the admin-ajax.php URL, forced onto the frontend's own scheme and host.
 	 *
 	 * The admin_url() function can point at a different scheme (e.g.
@@ -375,8 +398,9 @@ class CookieNotice {
 			'frontconsent-cookie-notice',
 			'frcnCookieNotice',
 			array(
-				'ajaxUrl'        => $this->get_ajax_url(),
-				'cookieName'     => $this->get_cookie_name(),
+				'ajaxUrl'              => $this->get_ajax_url(),
+				'cookieName'           => $this->get_cookie_name(),
+				'categoriesCookieName' => $this->get_categories_cookie_name(),
 				// Always '/', not COOKIEPATH: COOKIEPATH is derived from the
 				// Home URL's own path, but this cookie must also be sent to
 				// the admin-ajax.php request in get_ajax_url(), which lives
@@ -384,14 +408,14 @@ class CookieNotice {
 				// and Site URL have different paths, COOKIEPATH would scope
 				// the cookie to a path admin-ajax.php falls outside of, and
 				// the browser would silently omit it from that request.
-				'cookiePath'     => '/',
-				'expirationDays' => $days > 0 ? $days : 365,
+				'cookiePath'           => '/',
+				'expirationDays'       => $days > 0 ? $days : 365,
 				// The reopen trigger's banner never renders on the policy page
 				// (see render_banner()) — reloading in place there would leave
 				// the visitor with no controls at all, so JS instead sends them
 				// home, where the banner is guaranteed to render.
-				'isPolicyPage'   => $this->is_policy_page(),
-				'homeUrl'        => home_url( '/' ),
+				'isPolicyPage'         => $this->is_policy_page(),
+				'homeUrl'              => home_url( '/' ),
 			)
 		);
 
@@ -688,33 +712,54 @@ class CookieNotice {
 				</div>
 				<?php
 				/*
-				 * The Free tier's own binary decision (accepted/rejected) is
-				 * still the single source of truth for what gets recorded and
-				 * for the tracking-integration gate below — this toggle is
-				 * presentation, not a second storage location. It exists so a
-				 * visitor gets visible confirmation of what Accept all/Reject
-				 * all actually did (and can flip it back off and Save changes
-				 * to return to only "Strictly necessary" being active) instead
-				 * of a panel that looks identical no matter what they clicked.
-				 * frontconsent-cookie-notice.js syncs its checked state from the
-				 * current consent cookie every time the panel opens, and reads
-				 * it back (via data-frcn-category) on Save changes / Accept all.
+				 * Two real, independently-controllable toggles — not a single
+				 * combined checkbox — because Analytics and Marketing gate
+				 * genuinely different integrations (see
+				 * get_integration_default_category(): gtm/ga4 are 'analytics';
+				 * clientify/brevo/openai ads are 'marketing'). Each toggle's
+				 * data-frcn-category slug ('analytics'/'marketing') is read
+				 * back by collectPreferencesCategories() on Save changes /
+				 * Accept all, persisted client-side into the
+				 * frontconsent_categories cookie (see setConsentCookie()'s
+				 * sibling in frontconsent-cookie-notice.js), and then read
+				 * server-side by get_config_callback() to build the real
+				 * allowedCategories map that frcnCookieNoticeInject() actually
+				 * gates GTM/GA4 and the other tracking integrations on — this
+				 * is a functionally meaningful split, not a cosmetic one.
+				 * frontconsent-cookie-notice.js syncs each toggle's checked
+				 * state from that same cookie every time the panel opens.
 				 */
 				?>
 				<div class="frcn-cookie-preferences__category">
 					<div class="frcn-cookie-preferences__category-header">
-						<label class="frcn-cookie-preferences__category-title" for="frcn-cookie-preferences-optional">
-							<?php esc_html_e( 'Analytics & Marketing', 'frontconsent' ); ?>
+						<label class="frcn-cookie-preferences__category-title" for="frcn-cookie-preferences-analytics">
+							<?php esc_html_e( 'Analytics', 'frontconsent' ); ?>
 						</label>
 						<input
 							type="checkbox"
-							id="frcn-cookie-preferences-optional"
+							id="frcn-cookie-preferences-analytics"
 							class="frcn-cookie-preferences__category-toggle"
-							data-frcn-category="optional"
+							data-frcn-category="analytics"
 						/>
 					</div>
 					<p class="frcn-cookie-preferences__category-description">
-						<?php esc_html_e( 'Cookies used to understand how visitors use the site and to show relevant marketing. Only active after you accept them.', 'frontconsent' ); ?>
+						<?php esc_html_e( 'Cookies used to understand how visitors use the site (e.g. Google Analytics, Google Tag Manager). Only active after you accept them.', 'frontconsent' ); ?>
+					</p>
+				</div>
+				<div class="frcn-cookie-preferences__category">
+					<div class="frcn-cookie-preferences__category-header">
+						<label class="frcn-cookie-preferences__category-title" for="frcn-cookie-preferences-marketing">
+							<?php esc_html_e( 'Marketing', 'frontconsent' ); ?>
+						</label>
+						<input
+							type="checkbox"
+							id="frcn-cookie-preferences-marketing"
+							class="frcn-cookie-preferences__category-toggle"
+							data-frcn-category="marketing"
+						/>
+					</div>
+					<p class="frcn-cookie-preferences__category-description">
+						<?php esc_html_e( 'Cookies used to show relevant marketing and measure ad performance (e.g. Clientify, Brevo, OpenAI ads). Only active after you accept them.', 'frontconsent' ); ?>
 					</p>
 				</div>
 				<?php
@@ -1408,7 +1453,7 @@ class CookieNotice {
 		 * @param bool $has_tracking_consent Whether binary consent is accepted.
 		 */
 		$has_tracking_consent          = (bool) apply_filters( 'frcn_cookie_notice_has_tracking_consent', $has_tracking_consent );
-		$response['allowedCategories'] = apply_filters( 'frcn_cookie_notice_allowed_tracking_categories', null );
+		$response['allowedCategories'] = apply_filters( 'frcn_cookie_notice_allowed_tracking_categories', $this->get_allowed_categories_default() );
 
 		if ( $this->is_enabled() && $has_tracking_consent ) {
 			$options       = get_option( 'frontconsent_settings', array() );
@@ -1449,6 +1494,61 @@ class CookieNotice {
 		}
 
 		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Build the Free tier's own real, per-category allowedCategories default
+	 * — read from the frontconsent_categories cookie a visitor's browser
+	 * sends automatically once they've made an explicit choice in the
+	 * preferences panel (see get_categories_cookie_name()). This is what
+	 * turns the Analytics/Marketing toggles in render_preferences_panel()
+	 * into an actually meaningful split: frcnCookieNoticeInject() (in
+	 * frontconsent-cookie-notice.js) uses this map to gate GTM/GA4
+	 * ('analytics') separately from Clientify/Brevo/OpenAI ads ('marketing').
+	 *
+	 * Backward compatibility: a visitor who accepted before this per-category
+	 * cookie existed has no frontconsent_categories cookie at all yet.
+	 * Previously 'accepted' meant everything loaded (allowedCategories was
+	 * always null, i.e. allow-all) — so a missing or unparseable/tampered
+	 * categories cookie must keep allowing both known categories for an
+	 * already-accepted visitor, rather than silently blocking tracking they
+	 * already consented to. Granular blocking only starts once a visitor has
+	 * actually gone through the panel and this cookie exists with real data.
+	 *
+	 * @return array<string, bool> Category slug => whether it's allowed.
+	 */
+	private function get_allowed_categories_default() {
+		$fallback_allowed = 'accepted' === $this->get_consent();
+		$fallback         = array(
+			'analytics' => $fallback_allowed,
+			'marketing' => $fallback_allowed,
+		);
+
+		$cookie_name = $this->get_categories_cookie_name();
+
+		if ( ! isset( $_COOKIE[ $cookie_name ] ) ) {
+			return $fallback;
+		}
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- raw JSON can't be run through a string sanitizer without corrupting it; every decoded key/value is sanitized individually below (sanitize_key()/boolean cast) before it's ever used.
+		$decoded = json_decode( wp_unslash( $_COOKIE[ $cookie_name ] ), true );
+
+		if ( ! is_array( $decoded ) ) {
+			// Malformed/tampered cookie value (invalid JSON, not an array,
+			// etc.): fall back to the exact same safe default as no cookie at
+			// all, never fatal or warn on untrusted input.
+			return $fallback;
+		}
+
+		$categories = array();
+		foreach ( $decoded as $key => $value ) {
+			$categories[ sanitize_key( (string) $key ) ] = (bool) $value;
+		}
+
+		// Merged onto the fallback (not a full replacement): a cookie that
+		// only ever recorded one category still gets a defined value for the
+		// other one, instead of silently denying it.
+		return array_merge( $fallback, $categories );
 	}
 
 	/**

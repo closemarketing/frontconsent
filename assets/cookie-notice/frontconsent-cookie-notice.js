@@ -326,6 +326,26 @@
 				'; path=' + frcnCookieNotice.cookiePath + '; max-age=' + maxAge + '; SameSite=Lax' + secure;
 		}
 
+		/**
+		 * Persist the visitor's actual per-category selection (e.g.
+		 * {"analytics":true,"marketing":false}) into its own cookie, right
+		 * alongside the binary consent cookie above — same path/max-age/
+		 * SameSite conventions, just a separate cookie name (see
+		 * CookieNotice::get_categories_cookie_name()). This is what lets
+		 * get_config_callback() build a real allowedCategories map server-side
+		 * on the next request, purely from the normal cookie header, with no
+		 * new AJAX plumbing needed.
+		 *
+		 * @param {Object} categories Category slug => bool map (see collectPreferencesCategories()).
+		 */
+		function setCategoriesCookie(categories) {
+			var maxAge = parseInt(frcnCookieNotice.expirationDays, 10) * 24 * 60 * 60;
+			var secure = window.location.protocol === 'https:' ? '; Secure' : '';
+
+			document.cookie = frcnCookieNotice.categoriesCookieName + '=' + encodeURIComponent(JSON.stringify(categories)) +
+				'; path=' + frcnCookieNotice.cookiePath + '; max-age=' + maxAge + '; SameSite=Lax' + secure;
+		}
+
 		function updateConsentMode(decision) {
 			var granted = decision === 'accepted' ? 'granted' : 'denied';
 
@@ -418,7 +438,20 @@
 
 			decided = true;
 
+			// The banner's own plain Accept/Reject buttons call this with no
+			// `categories` argument at all — they still must record an
+			// explicit, real per-category state (both allowed on Accept, both
+			// denied on Reject) rather than leaving the categories cookie
+			// stale or absent, since get_config_callback() treats "cookie
+			// present" as "the visitor made an explicit per-category choice".
+			var categoriesToStore = categories || {
+				necessary: true,
+				analytics: decision === 'accepted',
+				marketing: decision === 'accepted'
+			};
+
 			setConsentCookie(decision);
+			setCategoriesCookie(categoriesToStore);
 			updateConsentMode(decision);
 			announce(decision === 'accepted' ? i18n.accepted : i18n.rejected);
 			hideBannerIfPresent();
@@ -598,13 +631,20 @@
 		}
 
 		/**
-		 * Reflects the visitor's current, actually-recorded decision onto
-		 * every [data-frcn-category] toggle in the panel every time it opens
-		 * — otherwise the panel looks identical no matter what Accept
-		 * all/Reject all/Save changes previously did, leaving no visible
-		 * confirmation of what happened. The consent cookie (accepted/rejected)
-		 * remains the single source of truth this reads from; toggles are
-		 * purely a reflection of it, not a second, independently-tracked state.
+		 * Reflects the visitor's current, actually-recorded per-category
+		 * decision onto each [data-frcn-category] toggle independently every
+		 * time the panel opens — reading the frontconsent_categories cookie
+		 * (written by setCategoriesCookie() above), not the single binary
+		 * consent cookie, so unchecking Marketing while leaving Analytics
+		 * checked is reflected as two different states, not one flag mirrored
+		 * onto both toggles.
+		 *
+		 * Backward compatibility: a visitor who accepted before this cookie
+		 * existed has no frontconsent_categories cookie yet — for them,
+		 * 'accepted' previously meant everything was allowed, so both
+		 * toggles show checked (matching that same reality) until they make
+		 * an explicit per-category choice here. Absent or rejected: both
+		 * unchecked.
 		 */
 		function syncPreferencesToggles() {
 			if (!preferencesPanel) {
@@ -612,10 +652,38 @@
 			}
 
 			var accepted = readCookie(frcnCookieNotice.cookieName) === 'accepted';
+			var storedCategoriesRaw = readCookie(frcnCookieNotice.categoriesCookieName);
+			var storedCategories = null;
+
+			if (storedCategoriesRaw) {
+				try {
+					var parsed = JSON.parse(storedCategoriesRaw);
+
+					if (parsed && typeof parsed === 'object') {
+						storedCategories = parsed;
+					}
+				} catch (e) {
+					// Malformed/tampered cookie value: treat it the same as
+					// no categories cookie at all (the accepted/rejected
+					// fallback below).
+					storedCategories = null;
+				}
+			}
+
 			var toggles = preferencesPanel.querySelectorAll('[data-frcn-category]');
 
 			Array.prototype.forEach.call(toggles, function (toggle) {
-				toggle.checked = accepted;
+				var category = toggle.getAttribute('data-frcn-category');
+
+				if (storedCategories && Object.prototype.hasOwnProperty.call(storedCategories, category)) {
+					toggle.checked = !!storedCategories[category];
+				} else {
+					// No explicit stored value for this category (cookie
+					// missing/unparseable, or simply doesn't mention it yet):
+					// fall back to the binary cookie's own "everything was
+					// allowed/nothing was allowed" reality.
+					toggle.checked = accepted;
+				}
 			});
 		}
 
@@ -722,7 +790,11 @@
 
 			if (panelRejectBtn) {
 				panelRejectBtn.addEventListener('click', function () {
-					handleDecision('rejected', { necessary: true });
+					// Explicit, real "both off" state — not an ambiguous
+					// absence of analytics/marketing keys — so the categories
+					// cookie (and the server-side allowedCategories it drives)
+					// reflects an actual decision rather than "unspecified".
+					handleDecision('rejected', { necessary: true, analytics: false, marketing: false });
 				});
 			}
 
