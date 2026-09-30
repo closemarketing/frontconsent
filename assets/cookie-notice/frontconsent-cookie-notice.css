@@ -142,6 +142,36 @@
 	color: var(--frcn-cookie-text);
 }
 
+/*
+ * "Customize cookie settings" — a secondary/outline button so it never
+ * competes visually with Accept/Reject: same shape and sizing as the other
+ * actions, but a plain border and no filled background.
+ */
+.frcn-cookie-notice__button--customize {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	background-color: transparent;
+	border: 1px solid var(--frcn-cookie-accent-on-light);
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-notice__button-icon {
+	display: block;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	background-color: var(--frcn-cookie-accent-on-light);
+	-webkit-mask-image: var(--frcn-cookie-icon-url);
+	mask-image: var(--frcn-cookie-icon-url);
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+}
+
 /* Bar layout: floating bottom bar, spanning most of the viewport width. */
 .frcn-cookie-notice--bar {
 	left: 20px;
@@ -378,4 +408,149 @@ body.frcn-cookie-notice-lock-scroll {
 .frcn-cookie-reopen:focus-visible {
 	outline: 2px solid var(--frcn-cookie-accent);
 	outline-offset: 2px;
+}
+
+/*
+ * Cookie preferences panel: a true modal dialog, printed unconditionally
+ * (see CookieNotice::render_preferences_panel()) and hidden by default via
+ * the `hidden` attribute — frontconsent-cookie-notice.js removes it to open
+ * the dialog, from either the "Customize" button or the persistent reopen
+ * trigger.
+ */
+.frcn-cookie-preferences {
+	--frcn-cookie-accent: #687df9;
+	--frcn-cookie-accent-contrast: #ffffff;
+	--frcn-cookie-accent-on-light: #687df9;
+	--frcn-cookie-bg: #ffffff;
+	--frcn-cookie-text: #1f2937;
+	--frcn-cookie-radius: 12px;
+
+	position: fixed;
+	z-index: 1000000;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	overflow-y: auto;
+	background-color: rgba(17, 24, 39, 0.5);
+	font-family: inherit;
+	line-height: 1.5;
+	box-sizing: border-box;
+}
+
+.frcn-cookie-preferences * {
+	box-sizing: border-box;
+}
+
+.frcn-cookie-preferences[hidden] {
+	display: none;
+}
+
+.frcn-cookie-preferences__panel {
+	background-color: var(--frcn-cookie-bg);
+	color: var(--frcn-cookie-text);
+	border-radius: var(--frcn-cookie-radius);
+	max-width: 480px;
+	width: 100%;
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.frcn-cookie-preferences__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.frcn-cookie-preferences__title {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-preferences__close {
+	appearance: none;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	font-size: 20px;
+	line-height: 1;
+	padding: 4px 8px;
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-preferences__close:focus-visible {
+	outline: 2px solid var(--frcn-cookie-accent-on-light);
+	outline-offset: 2px;
+}
+
+.frcn-cookie-preferences__message {
+	margin: 0;
+	font-size: 14px;
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-preferences__category {
+	border: 1px solid rgba(31, 41, 55, 0.12);
+	border-radius: calc(var(--frcn-cookie-radius) / 2);
+	padding: 12px 16px;
+}
+
+.frcn-cookie-preferences__category-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.frcn-cookie-preferences__category-title {
+	font-weight: 600;
+	font-size: 14px;
+}
+
+.frcn-cookie-preferences__category-badge {
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	color: var(--frcn-cookie-accent-on-light);
+}
+
+.frcn-cookie-preferences__category-description {
+	margin: 8px 0 0;
+	font-size: 13px;
+	color: var(--frcn-cookie-text);
+}
+
+.frcn-cookie-preferences__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: flex-end;
+}
+
+.frcn-cookie-preferences__actions .frcn-cookie-notice__button {
+	flex: 1 1 auto;
+}
+
+@media (max-width: 600px) {
+	.frcn-cookie-preferences__panel {
+		max-height: calc(100vh - 24px);
+	}
+
+	.frcn-cookie-preferences__actions {
+		flex-direction: column;
+	}
+
+	.frcn-cookie-preferences__actions .frcn-cookie-notice__button {
+		width: 100%;
+		text-align: center;
+	}
 }

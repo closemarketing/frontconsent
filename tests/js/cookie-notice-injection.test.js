@@ -40,9 +40,17 @@ function createEnvironment(options = {}) {
 	};
 	const reopenBtn = {
 		hidden: true,
+		focusCalls: 0,
+		focus() { this.focusCalls += 1; },
 		addEventListener(event, callback) {
 			reopenListeners[event] = callback;
 		}
+	};
+	const preferencesPanel = {
+		hidden: true,
+		classList: { add() {}, remove() {}, contains() { return false; } },
+		querySelector() { return null; },
+		querySelectorAll() { return []; }
 	};
 	const document = {
 		activeElement: null,
@@ -51,11 +59,15 @@ function createEnvironment(options = {}) {
 		head: { appendChild(script) { scripts.push(script); } },
 		readyState: 'loading',
 		addEventListener(event, callback) { listeners[event] = callback; },
+		removeEventListener() {},
 		createElement() { return {}; },
 		dispatchEvent() {},
-		getElementById(id) { return id === 'frcn-cookie-reopen' ? reopenBtn : banner; },
-		getElementsByTagName() { return []; },
-		removeEventListener() {}
+		getElementById(id) {
+			if (id === 'frcn-cookie-reopen') { return reopenBtn; }
+			if (id === 'frcn-cookie-preferences') { return preferencesPanel; }
+			return banner;
+		},
+		getElementsByTagName() { return []; }
 	};
 	const window = {
 		location: { protocol: 'https:' },
@@ -105,7 +117,7 @@ function createEnvironment(options = {}) {
 	vm.runInNewContext(cookieNoticeScript, context);
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, fetchActions, fetchCalls: () => fetchCalls, reopenBtn, reopenListeners, scripts, window };
+	return { actionListeners, fetchActions, fetchCalls: () => fetchCalls, preferencesPanel, reopenBtn, reopenListeners, scripts, window };
 }
 
 test('does not load ChatGPT Ads before consent and loads it after acceptance', async () => {
@@ -222,21 +234,24 @@ test('reopen trigger stays hidden when no decision has been made yet', () => {
 	assert.equal(environment.reopenListeners.click, undefined);
 });
 
-test('reopen trigger is revealed and clears the consent cookie on click', () => {
+test('reopen trigger is revealed and opens the preferences panel on click', () => {
 	const environment = createEnvironment({ cookie: 'frcn_cookie_consent=accepted' });
 
 	assert.equal(environment.reopenBtn.hidden, false);
 	assert.equal(typeof environment.reopenListeners.click, 'function');
+	assert.equal(environment.preferencesPanel.hidden, true);
 
 	let reloaded = false;
 	environment.window.location.reload = () => { reloaded = true; };
 
 	environment.reopenListeners.click();
 
-	assert.equal(reloaded, true);
+	// The panel opens in place — no reload, no navigation away.
+	assert.equal(reloaded, false);
+	assert.equal(environment.preferencesPanel.hidden, false);
 });
 
-test('reopen trigger on the policy page navigates home instead of reloading in place', () => {
+test('reopen trigger opens the preferences panel on the policy page too', () => {
 	const environment = createEnvironment({
 		cookie: 'frcn_cookie_consent=accepted',
 		isPolicyPage: '1',
@@ -248,8 +263,12 @@ test('reopen trigger on the policy page navigates home instead of reloading in p
 
 	environment.reopenListeners.click();
 
+	// The preferences panel is rendered unconditionally (including on the
+	// policy page — see CookieNotice::render_preferences_panel()), so the
+	// reopen trigger no longer needs to navigate away to reach it.
 	assert.equal(reloaded, false);
-	assert.equal(environment.window.location.href, 'https://example.test/');
+	assert.equal(environment.window.location.href, undefined);
+	assert.equal(environment.preferencesPanel.hidden, false);
 });
 
 test('accepting sends the consent update through gtag(), not a raw dataLayer push', async () => {

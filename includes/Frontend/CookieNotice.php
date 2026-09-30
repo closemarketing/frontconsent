@@ -83,6 +83,17 @@ class CookieNotice {
 			add_action( 'wp_footer', array( $this, 'render_banner' ) );
 		}
 
+		// Registered unconditionally (unlike the block above): render_banner_markup()
+		// itself only ever runs while the module is enabled, so gating this on
+		// is_enabled() here too would be redundant — and would wrongly stay
+		// unregistered for the rest of the request if a test (or an early
+		// integration) constructs this class before the option is saved.
+		// Prints the "Customize cookie settings" button through the same
+		// extension point a PRO add-on would use, so Free and PRO share one
+		// code path — see render_banner_markup()'s own docblock for
+		// frcn_cookie_notice_before_actions.
+		add_action( 'frcn_cookie_notice_before_actions', array( $this, 'render_customize_button' ) );
+
 		// The endpoints must stay available for logged-out and logged-in visitors alike.
 		add_action( 'wp_ajax_frcn_log_cookie_consent', array( $this, 'log_consent_callback' ) );
 		add_action( 'wp_ajax_nopriv_frcn_log_cookie_consent', array( $this, 'log_consent_callback' ) );
@@ -460,6 +471,7 @@ class CookieNotice {
 		}
 
 		$this->render_reopen_trigger();
+		$this->render_preferences_panel();
 		$this->render_status_announcer();
 	}
 
@@ -524,6 +536,200 @@ class CookieNotice {
 		>
 			<span class="frcn-cookie-notice__icon" aria-hidden="true"></span>
 		</button>
+		<?php
+	}
+
+	/**
+	 * Render the "Customize cookie settings" button, printed on the
+	 * 'frcn_cookie_notice_before_actions' action — the very same extension
+	 * point a PRO add-on would use to print its own trigger, so this button
+	 * never needs any markup PRO couldn't also produce itself. It always
+	 * shows the cookie icon (reusing the same CSS-mask technique as
+	 * .frcn-cookie-notice__icon) and is positioned to the left of
+	 * Reject/Accept purely by DOM order (see render_banner_markup()).
+	 *
+	 * Clicking it doesn't decide anything by itself — frontconsent-cookie-notice.js
+	 * intercepts data-frcn-cookie-action="customize" and opens the preferences
+	 * panel rendered by render_preferences_panel().
+	 *
+	 * @param array $options The 'frontconsent_settings' option array.
+	 * @return void
+	 */
+	public function render_customize_button( $options ) {
+		/**
+		 * Filters whether the "Customize cookie settings" button is shown at all.
+		 *
+		 * Return false to hide it entirely — e.g. a PRO tier that replaces it with
+		 * its own trigger printed on the same 'frcn_cookie_notice_before_actions'
+		 * action.
+		 *
+		 * @param bool  $enabled Whether to show the button. Default true.
+		 * @param array $options The 'frontconsent_settings' option array.
+		 */
+		$enabled = (bool) apply_filters( 'frcn_cookie_customize_button_enabled', true, $options );
+
+		if ( ! $enabled ) {
+			return;
+		}
+
+		/**
+		 * Filters the "Customize cookie settings" button label.
+		 *
+		 * @param string $label   The default, translatable button label.
+		 * @param array  $options The 'frontconsent_settings' option array.
+		 */
+		$label = (string) apply_filters( 'frcn_cookie_customize_button_label', __( 'Customize cookie settings', 'frontconsent' ), $options );
+		?>
+		<button
+			type="button"
+			class="frcn-cookie-notice__button frcn-cookie-notice__button--customize"
+			data-frcn-cookie-action="customize"
+			aria-haspopup="dialog"
+			aria-controls="frcn-cookie-preferences"
+		>
+			<span class="frcn-cookie-notice__button-icon" aria-hidden="true"></span>
+			<?php echo esc_html( $label ); ?>
+		</button>
+		<?php
+	}
+
+	/**
+	 * Render the cookie preferences panel: a dialog offering Accept all /
+	 * Reject all / Save changes, plus a static "Strictly necessary" section.
+	 *
+	 * Always printed — including on the policy page, and identically for
+	 * every visitor of a cached page — and hidden by default via the
+	 * `hidden` attribute; frontconsent-cookie-notice.js is what actually
+	 * opens it (from the Customize button or the persistent reopen trigger)
+	 * and traps focus inside it, keeping this cache-neutral like the rest of
+	 * the banner.
+	 *
+	 * Every action inside fires the exact same client-side decision flow the
+	 * main Accept/Reject buttons use (see frontconsent-cookie-notice.js's
+	 * handleDecision()) — there is no parallel consent-recording logic here.
+	 *
+	 * @return void
+	 */
+	private function render_preferences_panel() {
+		$options        = get_option( 'frontconsent_settings', array() );
+		$message        = trim( (string) ( $options['cookie_notice_message'] ?? '' ) );
+		$policy_page_id = (int) ( $options['cookie_notice_policy_page_id'] ?? 0 );
+		$policy_url     = $policy_page_id ? (string) get_permalink( $policy_page_id ) : '';
+		$color          = (string) ( $options['cookie_notice_color'] ?? '#687df9' );
+		$bg_color       = (string) ( $options['cookie_notice_bg_color'] ?? '#ffffff' );
+		$radius         = (string) ( $options['cookie_notice_radius'] ?? 'small' );
+
+		if ( '' === $message ) {
+			$message = __( 'We use cookies to improve your experience on our website. Please choose whether to accept or reject them.', 'frontconsent' );
+		}
+
+		$accent_text = $this->get_readable_text_color( $color );
+		$accent_link = $this->get_readable_on_white_color( $color, $bg_color );
+		$panel_text  = $this->get_readable_text_color( $bg_color );
+		$style       = sprintf(
+			'--frcn-cookie-accent: %1$s; --frcn-cookie-accent-contrast: %2$s; --frcn-cookie-accent-on-light: %3$s; --frcn-cookie-bg: %4$s; --frcn-cookie-text: %5$s; --frcn-cookie-radius: %6$s; --frcn-cookie-icon-url: url(%7$s);',
+			esc_attr( $color ),
+			esc_attr( $accent_text ),
+			esc_attr( $accent_link ),
+			esc_attr( $bg_color ),
+			esc_attr( $panel_text ),
+			esc_attr( $this->get_radius_value( $radius ) ),
+			esc_attr( FRCN_PLUGIN_URL . 'assets/cookie-notice/cookie-icon.svg' )
+		);
+		?>
+		<div
+			id="frcn-cookie-preferences"
+			class="frcn-cookie-preferences"
+			style="<?php echo esc_attr( $style ); ?>"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="frcn-cookie-preferences-title"
+			aria-describedby="frcn-cookie-preferences-message"
+			hidden
+		>
+			<div class="frcn-cookie-preferences__panel">
+				<div class="frcn-cookie-preferences__header">
+					<h2 id="frcn-cookie-preferences-title" class="frcn-cookie-preferences__title">
+						<?php esc_html_e( 'Cookie preferences', 'frontconsent' ); ?>
+					</h2>
+					<button
+						type="button"
+						class="frcn-cookie-preferences__close"
+						data-frcn-cookie-action="close-preferences"
+						aria-label="<?php echo esc_attr__( 'Close', 'frontconsent' ); ?>"
+					>
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<p id="frcn-cookie-preferences-message" class="frcn-cookie-preferences__message">
+					<?php
+					echo esc_html( $message );
+
+					if ( $policy_url ) {
+						$policy_title = $policy_page_id ? get_the_title( $policy_page_id ) : '';
+						$link_text    = '' !== $policy_title ? $policy_title : __( 'Learn more', 'frontconsent' );
+
+						echo ' <a href="' . esc_url( $policy_url ) . '" class="frcn-cookie-notice__link" target="_blank" rel="noopener noreferrer">' . esc_html( $link_text ) . '</a>';
+					}
+					?>
+				</p>
+				<div class="frcn-cookie-preferences__category frcn-cookie-preferences__category--necessary">
+					<div class="frcn-cookie-preferences__category-header">
+						<span class="frcn-cookie-preferences__category-title">
+							<?php esc_html_e( 'Strictly necessary', 'frontconsent' ); ?>
+						</span>
+						<span class="frcn-cookie-preferences__category-badge">
+							<?php esc_html_e( 'Always active', 'frontconsent' ); ?>
+						</span>
+					</div>
+					<p class="frcn-cookie-preferences__category-description">
+						<?php esc_html_e( 'These cookies are required for the site to function (e.g. remembering your consent choice) and cannot be switched off.', 'frontconsent' ); ?>
+					</p>
+				</div>
+				<?php
+				/**
+				 * Fires inside the cookie preferences panel, right after the
+				 * always-on "Strictly necessary" section and before the
+				 * Reject all / Save changes / Accept all actions.
+				 *
+				 * FrontConsent PRO hooks here to render its own per-category
+				 * toggles (e.g. Preferences, Analytics, Marketing), each with a
+				 * name/data attribute it can read back from the submitted form —
+				 * see frcn_cookie_consent_categories for how that per-category
+				 * state reaches the consent-recording AJAX endpoint. Nothing is
+				 * rendered here in the Free tier: without PRO active, this
+				 * simply prints nothing and only the static "Strictly necessary"
+				 * block above is shown.
+				 *
+				 * @param array $options The 'frontconsent_settings' option array.
+				 */
+				do_action( 'frcn_cookie_preferences_categories', $options );
+				?>
+				<div class="frcn-cookie-preferences__actions">
+					<button
+						type="button"
+						class="frcn-cookie-notice__button frcn-cookie-notice__button--reject"
+						data-frcn-cookie-action="reject"
+					>
+						<?php esc_html_e( 'Reject all', 'frontconsent' ); ?>
+					</button>
+					<button
+						type="button"
+						class="frcn-cookie-notice__button frcn-cookie-notice__button--save"
+						data-frcn-cookie-action="save"
+					>
+						<?php esc_html_e( 'Save changes', 'frontconsent' ); ?>
+					</button>
+					<button
+						type="button"
+						class="frcn-cookie-notice__button frcn-cookie-notice__button--accept"
+						data-frcn-cookie-action="accept"
+					>
+						<?php esc_html_e( 'Accept all', 'frontconsent' ); ?>
+					</button>
+				</div>
+			</div>
+		</div>
 		<?php
 	}
 
@@ -682,6 +888,13 @@ class CookieNotice {
 		if ( $is_modal ) {
 			$noscript_css .= ' .frcn-cookie-notice--popup { position: static; display: block; overflow: visible; background-color: transparent; padding: 0; } .frcn-cookie-notice--popup .frcn-cookie-notice__panel { max-width: none; box-shadow: none; }';
 		}
+
+		// The "Customize cookie settings" button and the panel it opens are
+		// both entirely JS-driven (opening/trapping/closing a dialog needs a
+		// script) — without JS there is nothing useful the button could do,
+		// so it's hidden rather than left sitting there dead. Accept/Reject
+		// keep working as always via the <form> fallback above.
+		$noscript_css .= ' .frcn-cookie-notice__button--customize { display: none; }';
 
 		$this->print_noscript_style( $noscript_css );
 
@@ -1292,7 +1505,55 @@ class CookieNotice {
 
 		$this->maybe_increment_stat( $decision );
 
-		wp_send_json_success();
+		wp_send_json_success( array( 'categories' => $this->get_consent_categories_payload( $decision ) ) );
+	}
+
+	/**
+	 * Build the (optional, additive) per-category consent map for the current
+	 * request, applying the frcn_cookie_consent_categories filter around it.
+	 *
+	 * The Free tier never populates this itself — the stored binary
+	 * accepted/rejected cookie stays the single source of truth for Free, and
+	 * this method only exists so FrontConsent PRO's per-category consent
+	 * (Analytics, Marketing, etc.) has a single, well-defined place to read
+	 * the raw category selection submitted by the preferences panel (see
+	 * render_preferences_panel()'s frcn_cookie_preferences_categories action)
+	 * and to persist/return its own per-category decision alongside the
+	 * binary one. Never required for the binary flow to keep working.
+	 *
+	 * @param string $decision 'accepted' or 'rejected'.
+	 * @return array<string, mixed> Category slug => state, empty unless something extends it.
+	 */
+	private function get_consent_categories_payload( $decision ) {
+		$categories = array();
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- the surrounding log_consent_callback() already verified the nonce above.
+		if ( isset( $_POST['categories'] ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- raw JSON can't be run through a string sanitizer without corrupting it; every decoded key/value is sanitized individually below (sanitize_key()/rest_sanitize_boolean()) before it's ever used.
+			$decoded = json_decode( (string) wp_unslash( $_POST['categories'] ), true );
+
+			if ( is_array( $decoded ) ) {
+				foreach ( $decoded as $key => $value ) {
+					$categories[ sanitize_key( (string) $key ) ] = rest_sanitize_boolean( $value );
+				}
+			}
+		}
+
+		/**
+		 * Filters the per-category consent map recorded alongside a binary
+		 * accept/reject decision.
+		 *
+		 * FrontConsent PRO hooks here to persist (e.g. in its own cookie/option)
+		 * and/or normalize the category selection a visitor made in the
+		 * preferences panel (see frcn_cookie_preferences_categories), and to
+		 * read back any category state it needs when this fires again on a
+		 * later request. The Free tier's own stored consent format never
+		 * depends on this value — it is optional and purely additive.
+		 *
+		 * @param array<string, mixed> $categories Category slug => state, decoded from the request.
+		 * @param string               $decision   The binary decision being recorded ('accepted' or 'rejected').
+		 */
+		return apply_filters( 'frcn_cookie_consent_categories', $categories, $decision );
 	}
 
 	/**
