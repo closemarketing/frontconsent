@@ -597,6 +597,28 @@
 			}
 		}
 
+		/**
+		 * Reflects the visitor's current, actually-recorded decision onto
+		 * every [data-frcn-category] toggle in the panel every time it opens
+		 * — otherwise the panel looks identical no matter what Accept
+		 * all/Reject all/Save changes previously did, leaving no visible
+		 * confirmation of what happened. The consent cookie (accepted/rejected)
+		 * remains the single source of truth this reads from; toggles are
+		 * purely a reflection of it, not a second, independently-tracked state.
+		 */
+		function syncPreferencesToggles() {
+			if (!preferencesPanel) {
+				return;
+			}
+
+			var accepted = readCookie(frcnCookieNotice.cookieName) === 'accepted';
+			var toggles = preferencesPanel.querySelectorAll('[data-frcn-category]');
+
+			Array.prototype.forEach.call(toggles, function (toggle) {
+				toggle.checked = accepted;
+			});
+		}
+
 		function openPreferencesPanel(trigger) {
 			if (!preferencesPanel) {
 				return;
@@ -607,6 +629,7 @@
 			// reopened panel instead of being silently blocked by the
 			// same-page debounce above.
 			decided = false;
+			syncPreferencesToggles();
 			preferencesPanelOpener = trigger || document.activeElement;
 			preferencesPanel.hidden = false;
 			document.body.classList.add('frcn-cookie-notice-lock-scroll');

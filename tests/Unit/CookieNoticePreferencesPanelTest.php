@@ -293,4 +293,34 @@ class CookieNoticePreferencesPanelTest extends TestCase {
 
 		$this->assertStringNotContainsString( 'data-frcn-cookie-action="customize"', $html );
 	}
+
+	/**
+	 * Without a real toggle, the panel looks identical no matter what Accept
+	 * all/Reject all/Save changes did — a visitor gets no visible
+	 * confirmation of the effect of their choice. The Free tier ships one
+	 * real, native checkbox (data-frcn-category="optional") that
+	 * frontconsent-cookie-notice.js syncs from the actual consent cookie on
+	 * every open and reads back on Save changes/Accept all, so the panel
+	 * always reflects what was actually recorded.
+	 */
+	public function test_panel_includes_a_real_optional_category_toggle() {
+		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
+
+		$html = $this->render_banner_html();
+
+		$this->assertMatchesRegularExpression(
+			'/<input[^>]*type="checkbox"[^>]*data-frcn-category="optional"/',
+			$html
+		);
+		$this->assertStringContainsString( 'Analytics &amp; Marketing', $html );
+
+		// Must appear after the static necessary block and before the PRO
+		// extension point, matching where render_preferences_panel() prints it.
+		$necessary_pos = strpos( $html, 'frcn-cookie-preferences__category--necessary' );
+		$toggle_pos     = strpos( $html, 'data-frcn-category="optional"' );
+
+		$this->assertNotFalse( $necessary_pos );
+		$this->assertNotFalse( $toggle_pos );
+		$this->assertGreaterThan( $necessary_pos, $toggle_pos );
+	}
 }

@@ -687,6 +687,37 @@ class CookieNotice {
 					</p>
 				</div>
 				<?php
+				/*
+				 * The Free tier's own binary decision (accepted/rejected) is
+				 * still the single source of truth for what gets recorded and
+				 * for the tracking-integration gate below — this toggle is
+				 * presentation, not a second storage location. It exists so a
+				 * visitor gets visible confirmation of what Accept all/Reject
+				 * all actually did (and can flip it back off and Save changes
+				 * to return to only "Strictly necessary" being active) instead
+				 * of a panel that looks identical no matter what they clicked.
+				 * frontconsent-cookie-notice.js syncs its checked state from the
+				 * current consent cookie every time the panel opens, and reads
+				 * it back (via data-frcn-category) on Save changes / Accept all.
+				 */
+				?>
+				<div class="frcn-cookie-preferences__category">
+					<div class="frcn-cookie-preferences__category-header">
+						<label class="frcn-cookie-preferences__category-title" for="frcn-cookie-preferences-optional">
+							<?php esc_html_e( 'Analytics & Marketing', 'frontconsent' ); ?>
+						</label>
+						<input
+							type="checkbox"
+							id="frcn-cookie-preferences-optional"
+							class="frcn-cookie-preferences__category-toggle"
+							data-frcn-category="optional"
+						/>
+					</div>
+					<p class="frcn-cookie-preferences__category-description">
+						<?php esc_html_e( 'Cookies used to understand how visitors use the site and to show relevant marketing. Only active after you accept them.', 'frontconsent' ); ?>
+					</p>
+				</div>
+				<?php
 				/**
 				 * Fires inside the cookie preferences panel, right after the
 				 * always-on "Strictly necessary" section and before the
