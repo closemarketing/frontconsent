@@ -411,6 +411,17 @@ body.frcn-cookie-notice-lock-scroll {
 }
 
 /*
+ * Without this, the `hidden` attribute in CookieNotice::render_reopen_trigger()
+ * markup has no visible effect: `display: flex` above is an author style,
+ * which always wins over the browser's own built-in `[hidden] { display: none }`
+ * rule regardless of selector specificity — so the button showed up
+ * immediately on first load instead of staying hidden until a decision exists.
+ */
+.frcn-cookie-reopen[hidden] {
+	display: none;
+}
+
+/*
  * Cookie preferences panel: a true modal dialog, printed unconditionally
  * (see CookieNotice::render_preferences_panel()) and hidden by default via
  * the `hidden` attribute — frontconsent-cookie-notice.js removes it to open
