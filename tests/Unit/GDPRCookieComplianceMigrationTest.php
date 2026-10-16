@@ -230,4 +230,42 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 		delete_option( Importer::DONE_FLAG );
 		delete_option( 'frontconsent_settings' );
 	}
+
+	public function test_unknown_enabled_integration_is_reported() {
+		$result = Importer::build( $this->source( array( 'gtm4wp' => 2 ) ), array() );
+
+		$this->assertSame( array( 'unsupported' ), $this->statuses( $result['report'] ) );
+		$this->assertArrayNotHasKey( 'enable_cookie_notice', $result['settings'] );
+
+		$result = Importer::build( $this->source( array( 'somethingnew' => 2 ) ), array() );
+		$this->assertSame( array( 'unsupported' ), $this->statuses( $result['report'] ) );
+	}
+
+	public function test_consent_mode_gtm_alone_enables_the_banner() {
+		$result = Importer::build(
+			$this->source(
+				array(
+					'gtmc2'    => 2,
+					'gtmc2_id' => 'GTM-CMV2AB',
+				)
+			),
+			array()
+		);
+
+		$this->assertTrue( $result['settings']['enable_cookie_notice'] );
+	}
+
+	public function test_top_position_is_reported_and_not_imported() {
+		$result = Importer::build( array( 'moove_gdpr_infobar_position' => 'top' ), array() );
+
+		$this->assertArrayNotHasKey( 'cookie_notice_position', $result['settings'] );
+		$this->assertArrayNotHasKey( 'cookie_notice_layout', $result['settings'] );
+		$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
+	}
+
+	public function test_block_boundaries_keep_a_separator_in_the_message() {
+		$result = Importer::build( array( 'moove_gdpr_info_bar_content' => '<p>One.</p><p>Two.</p>' ), array() );
+
+		$this->assertSame( "One.\nTwo.", $result['settings']['cookie_notice_message'] );
+	}
 }

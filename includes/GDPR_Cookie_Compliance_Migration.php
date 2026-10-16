@@ -73,6 +73,7 @@ class GDPR_Cookie_Compliance_Migration {
 			'fbp'       => __( 'Meta Pixel', 'frontconsent' ),
 			'muet'      => __( 'Microsoft Advertising (UET)', 'frontconsent' ),
 			'clarity'   => __( 'Microsoft Clarity', 'frontconsent' ),
+			'gtm4wp'    => __( 'GTM4WP (Google Tag Manager for WordPress)', 'frontconsent' ),
 			'recaptcha' => __( 'Google reCAPTCHA blocker', 'frontconsent' ),
 		);
 	}
@@ -119,6 +120,7 @@ class GDPR_Cookie_Compliance_Migration {
 	 */
 	public static function build( array $source, array $current ) {
 		$report = array();
+		$before = $current;
 
 		self::map_integrations( $source, $current, $report );
 		self::map_banner_settings( $source, $current, $report );
@@ -127,7 +129,7 @@ class GDPR_Cookie_Compliance_Migration {
 		// something was actually imported so removing the source plugin never
 		// leaves the site without a consent banner. An explicit saved choice
 		// is kept.
-		if ( in_array( self::STATUS_MIGRATED, wp_list_pluck( $report, 'status' ), true ) && ! array_key_exists( 'enable_cookie_notice', $current ) ) {
+		if ( $current !== $before && ! array_key_exists( 'enable_cookie_notice', $current ) ) {
 			$current['enable_cookie_notice'] = true;
 		}
 
@@ -173,6 +175,13 @@ class GDPR_Cookie_Compliance_Migration {
 			}
 
 			if ( ! isset( self::INTEGRATION_MAP[ $slug ] ) ) {
+				// Never drop an enabled integration silently: it may still be
+				// injecting its script once the source plugin is deactivated.
+				$report[] = array(
+					'item'   => sanitize_key( $slug ),
+					'status' => self::STATUS_UNSUPPORTED,
+					'note'   => __( 'Unrecognized integration, not imported. Check whether it still loads on your site after deactivating GDPR Cookie Compliance.', 'frontconsent' ),
+				);
 				continue;
 			}
 
@@ -259,7 +268,7 @@ class GDPR_Cookie_Compliance_Migration {
 			if ( ! isset( $source[ $source_key ] ) || ! is_string( $source[ $source_key ] ) ) {
 				continue;
 			}
-			$text = trim( sanitize_textarea_field( wp_strip_all_tags( $source[ $source_key ] ) ) );
+			$text = trim( sanitize_textarea_field( wp_strip_all_tags( preg_replace( '#</(p|div|li|h[1-6])>|<br\s*/?>#i', "\n", $source[ $source_key ] ) ) ) );
 			if ( '' !== $text ) {
 				$candidates[ $target_key ] = $text;
 			}
@@ -273,9 +282,18 @@ class GDPR_Cookie_Compliance_Migration {
 		}
 
 		if ( isset( $source['moove_gdpr_infobar_position'] ) ) {
-			$candidates['cookie_notice_position'] = 'left' === $source['moove_gdpr_infobar_position'] ? 'bottom-left' : 'bottom-right';
-			// Left/right positioning only applies to the box layout.
-			$candidates['cookie_notice_layout'] = 'box';
+			$position = $source['moove_gdpr_infobar_position'];
+			if ( in_array( $position, array( 'left', 'right' ), true ) ) {
+				$candidates['cookie_notice_position'] = 'left' === $position ? 'bottom-left' : 'bottom-right';
+				// Left/right positioning only applies to the box layout.
+				$candidates['cookie_notice_layout'] = 'box';
+			} else {
+				$report[] = array(
+					'item'   => __( 'Banner position', 'frontconsent' ),
+					'status' => self::STATUS_REVIEW,
+					'note'   => __( 'FrontConsent cannot reproduce this position (only bottom-left and bottom-right boxes). Choose a layout manually.', 'frontconsent' ),
+				);
+			}
 		}
 
 		$migrated = 0;
