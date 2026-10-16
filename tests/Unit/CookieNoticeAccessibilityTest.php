@@ -177,4 +177,19 @@ class CookieNoticeAccessibilityTest extends TestCase {
 		$this->assertStringNotContainsString( 'id="frcn-cookie-notice"', $html );
 		$this->assertStringContainsString( 'id="frcn-cookie-notice-announcer"', $html );
 	}
+
+	/**
+	 * The reopen trigger is icon-only: its accessible name must come from
+	 * aria-label, the SVG must be decorative, and it must start hidden
+	 * until JS reveals it for a visitor who already decided.
+	 */
+	public function test_reopen_trigger_is_an_accessible_icon_only_button() {
+		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
+
+		$html = $this->render_banner_html();
+
+		$this->assertMatchesRegularExpression( '/<button[^>]*id="frcn-cookie-reopen"[^>]*aria-label="Cookie preferences"/s', $html );
+		$this->assertMatchesRegularExpression( '/<button[^>]*id="frcn-cookie-reopen"[^>]*\shidden/s', $html );
+		$this->assertMatchesRegularExpression( '/<svg[^>]*class="frcn-cookie-reopen__icon"[^>]*aria-hidden="true"/s', $html );
+	}
 }
