@@ -124,15 +124,11 @@ class GDPR_Cookie_Compliance_Migration {
 		self::map_banner_settings( $source, $current, $report );
 
 		// A fresh FrontConsent install has the banner disabled; enable it when
-		// anything was imported so removing the source plugin never leaves the
-		// site without a consent banner. An explicit saved choice is kept.
-		if ( $report && ! array_key_exists( 'enable_cookie_notice', $current ) ) {
+		// something was actually imported so removing the source plugin never
+		// leaves the site without a consent banner. An explicit saved choice
+		// is kept.
+		if ( in_array( self::STATUS_MIGRATED, wp_list_pluck( $report, 'status' ), true ) && ! array_key_exists( 'enable_cookie_notice', $current ) ) {
 			$current['enable_cookie_notice'] = true;
-			$report[]                        = array(
-				'item'   => __( 'FrontConsent banner', 'frontconsent' ),
-				'status' => self::STATUS_MIGRATED,
-				'note'   => __( 'Enabled, so visitors keep seeing a consent banner.', 'frontconsent' ),
-			);
 		}
 
 		return array(
