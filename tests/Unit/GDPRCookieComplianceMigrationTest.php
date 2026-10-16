@@ -312,4 +312,32 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 		delete_option( Importer::SOURCE_OPTION );
 		delete_option( 'frontconsent_settings' );
 	}
+
+	public function test_every_removed_link_is_counted_in_the_report() {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+
+		$html   = '<a href="' . get_permalink( $page_id ) . '">a</a> <a href="https://example.org/x">b</a> <a href="https://example.org/y">c</a>';
+		$result = Importer::build( array( 'moove_gdpr_info_bar_content' => $html ), array() );
+
+		$this->assertSame( $page_id, $result['settings']['cookie_notice_policy_page_id'] );
+		$review = array_values( array_filter( $result['report'], static function ( $row ) {
+			return 'needs_review' === $row['status'];
+		} ) );
+		$this->assertCount( 1, $review );
+		$this->assertStringContainsString( '2', $review[0]['note'] );
+	}
+
+	public function test_position_is_not_mixed_with_a_partially_configured_layout() {
+		foreach ( array( array( 'cookie_notice_layout' => 'bar' ), array( 'cookie_notice_position' => 'bottom-right' ) ) as $current ) {
+			$result = Importer::build( array( 'moove_gdpr_infobar_position' => 'left' ), $current );
+
+			$this->assertSame( $current, $result['settings'] );
+			$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
+		}
+	}
 }

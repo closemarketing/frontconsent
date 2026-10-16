@@ -293,21 +293,30 @@ class GDPR_Cookie_Compliance_Migration {
 				continue;
 			}
 
-			// Anchors lose their URL when flattened to plain text: keep a
-			// local policy page link through the policy-page setting, and
-			// ask for a manual review otherwise.
-			if ( 'cookie_notice_message' === $target_key && 1 === preg_match( '/<a\s[^>]*href=["\']([^"\']+)["\']/i', $source[ $source_key ], $link ) ) {
-				$page_id = (int) url_to_postid( esc_url_raw( $link[1] ) );
-				if ( $page_id > 0 ) {
-					$candidates['cookie_notice_policy_page_id'] = $page_id;
-				} else {
+			// Anchors lose their URL when flattened to plain text: keep the
+			// first local page link through the policy-page setting, and ask
+			// for a manual review for every other link.
+			if ( 'cookie_notice_message' === $target_key && preg_match_all( '/<a\s[^>]*href=["\']([^"\']+)["\']/i', $source[ $source_key ], $links ) ) {
+				$removed = 0;
+				foreach ( $links[1] as $href ) {
+					$page_id = isset( $candidates['cookie_notice_policy_page_id'] ) ? 0 : (int) url_to_postid( esc_url_raw( $href ) );
+					if ( $page_id > 0 ) {
+						$candidates['cookie_notice_policy_page_id'] = $page_id;
+					} else {
+						++$removed;
+					}
+				}
+
+				if ( $removed > 0 ) {
 					$report[] = array(
-						'item'   => __( 'Banner message link', 'frontconsent' ),
+						'item'   => __( 'Banner message links', 'frontconsent' ),
 						'status' => self::STATUS_REVIEW,
-						'note'   => __( 'The banner message contained a link that is not a page of this site and was removed. Set the policy page in FrontConsent if needed.', 'frontconsent' ),
+						/* translators: %d: number of links. */
+						'note'   => sprintf( _n( '%d link in the banner message was removed (only one local policy page can be kept). Review the policy page in FrontConsent.', '%d links in the banner message were removed (only one local policy page can be kept). Review the policy page in FrontConsent.', $removed, 'frontconsent' ), $removed ),
 					);
 				}
 			}
+
 			$text = trim( sanitize_textarea_field( wp_strip_all_tags( preg_replace( '#</(p|div|li|h[1-6])>|<br\s*/?>#i', "\n", $source[ $source_key ] ) ) ) );
 			if ( '' !== $text ) {
 				$candidates[ $target_key ] = $text;
@@ -323,16 +332,26 @@ class GDPR_Cookie_Compliance_Migration {
 
 		if ( isset( $source['moove_gdpr_infobar_position'] ) ) {
 			$position = $source['moove_gdpr_infobar_position'];
-			if ( in_array( $position, array( 'left', 'right' ), true ) ) {
-				$candidates['cookie_notice_position'] = 'left' === $position ? 'bottom-left' : 'bottom-right';
-				// Left/right positioning only applies to the box layout.
-				$candidates['cookie_notice_layout'] = 'box';
-			} else {
+			if ( ! in_array( $position, array( 'left', 'right' ), true ) ) {
 				$report[] = array(
 					'item'   => __( 'Banner position', 'frontconsent' ),
 					'status' => self::STATUS_REVIEW,
 					'note'   => __( 'FrontConsent cannot reproduce this position (only bottom-left and bottom-right boxes). Choose a layout manually.', 'frontconsent' ),
 				);
+			} elseif ( ( $current['cookie_notice_position'] ?? '' ) === ( 'left' === $position ? 'bottom-left' : 'bottom-right' ) && 'box' === ( $current['cookie_notice_layout'] ?? '' ) ) {
+				// Already imported (idempotent re-run): nothing to do.
+				unset( $position );
+			} elseif ( array_key_exists( 'cookie_notice_position', $current ) || array_key_exists( 'cookie_notice_layout', $current ) ) {
+				// Position and layout only work as a pair (left/right applies
+				// to the box layout), so never mix them with existing values.
+				$report[] = array(
+					'item'   => __( 'Banner position', 'frontconsent' ),
+					'status' => self::STATUS_REVIEW,
+					'note'   => __( 'FrontConsent already has a layout or position configured, so the source position was not applied.', 'frontconsent' ),
+				);
+			} else {
+				$candidates['cookie_notice_position'] = 'left' === $position ? 'bottom-left' : 'bottom-right';
+				$candidates['cookie_notice_layout']   = 'box';
 			}
 		}
 
