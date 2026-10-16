@@ -175,6 +175,37 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 		$this->assertSame( 'OK', $result['settings']['cookie_notice_accept_label'] );
 		$this->assertSame( 90, $result['settings']['cookie_notice_expiration_days'] );
 		$this->assertSame( 'bottom-left', $result['settings']['cookie_notice_position'] );
+		$this->assertSame( 'box', $result['settings']['cookie_notice_layout'] );
+	}
+
+	public function test_banner_is_enabled_on_import_unless_already_chosen() {
+		$source = $this->source(
+			array(
+				'ga4'    => 2,
+				'ga4_id' => 'G-ABC123',
+			)
+		);
+
+		$fresh = Importer::build( $source, array() );
+		$this->assertTrue( $fresh['settings']['enable_cookie_notice'] );
+
+		$disabled = Importer::build( $source, array( 'enable_cookie_notice' => false ) );
+		$this->assertFalse( $disabled['settings']['enable_cookie_notice'] );
+	}
+
+	public function test_google_tag_ids_are_reported_as_unsupported() {
+		$result = Importer::build(
+			$this->source(
+				array(
+					'gtm'    => 2,
+					'gtm_id' => 'AW-123456789',
+				)
+			),
+			array()
+		);
+
+		$this->assertArrayNotHasKey( 'cookie_notice_tracking_integrations', $result['settings'] );
+		$this->assertSame( array( 'unsupported' ), $this->statuses( $result['report'] ) );
 	}
 
 	public function test_run_returns_null_without_source_and_never_writes_source() {

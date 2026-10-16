@@ -46,6 +46,10 @@ Activating FrontConsent copies your existing Cookie Notice settings and acceptan
 
 The free version keeps a simple aggregate accepted/rejected count. Per-visitor consent logging and cookie scanning are part of the planned Pro version.
 
+= Can I import my settings from GDPR Cookie Compliance? =
+
+Yes. If its settings are found, FrontConsent shows an "Import settings" button on its settings page. It imports Google Analytics 4 and Google Tag Manager IDs from the Integrations tab, plus the banner text, button labels, consent expiration and position, without overwriting anything you already configured in FrontConsent. Integrations FrontConsent has no equivalent for (Google Ads, Meta Pixel, Microsoft Advertising, Microsoft Clarity, reCAPTCHA blocker) are listed as not imported. The other plugin is never modified: deactivate it yourself after checking the result.
+
 == External services ==
 
 This plugin only connects to external services that the site owner explicitly configures — none are contacted by default. All connections below happen entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category; no data is ever sent from the server.

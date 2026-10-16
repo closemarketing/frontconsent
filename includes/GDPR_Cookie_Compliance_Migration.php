@@ -123,6 +123,18 @@ class GDPR_Cookie_Compliance_Migration {
 		self::map_integrations( $source, $current, $report );
 		self::map_banner_settings( $source, $current, $report );
 
+		// A fresh FrontConsent install has the banner disabled; enable it when
+		// anything was imported so removing the source plugin never leaves the
+		// site without a consent banner. An explicit saved choice is kept.
+		if ( $report && ! array_key_exists( 'enable_cookie_notice', $current ) ) {
+			$current['enable_cookie_notice'] = true;
+			$report[]                        = array(
+				'item'   => __( 'FrontConsent banner', 'frontconsent' ),
+				'status' => self::STATUS_MIGRATED,
+				'note'   => __( 'Enabled, so visitors keep seeing a consent banner.', 'frontconsent' ),
+			);
+		}
+
 		return array(
 			'settings' => $current,
 			'report'   => $report,
@@ -159,7 +171,7 @@ class GDPR_Cookie_Compliance_Migration {
 				$report[] = array(
 					'item'   => $unsupported[ $slug ],
 					'status' => self::STATUS_UNSUPPORTED,
-					'note'   => __( 'FrontConsent has no equivalent integration yet. Add it manually.', 'frontconsent' ),
+					'note'   => __( 'FrontConsent has no equivalent integration yet and it was not imported. Do not hard-code its script (it would run before consent); load it through Google Tag Manager with consent-aware triggers instead.', 'frontconsent' ),
 				);
 				continue;
 			}
@@ -174,6 +186,16 @@ class GDPR_Cookie_Compliance_Migration {
 			// The source plugin accepts GA4 measurement IDs in its GTM field.
 			if ( 'gtm' === $type && 0 === strpos( $id, 'G-' ) ) {
 				$type = 'ga4';
+			}
+
+			// Google tag IDs added in source plugin 5.2 have no FrontConsent type.
+			if ( 1 === preg_match( '/^(GT|AW)-[A-Z0-9]+$/', $id ) ) {
+				$report[] = array(
+					'item'   => $id,
+					'status' => self::STATUS_UNSUPPORTED,
+					'note'   => __( 'Google tag (GT-/AW-) IDs are not supported by FrontConsent and were not imported. Load them through Google Tag Manager with consent-aware triggers instead.', 'frontconsent' ),
+				);
+				continue;
 			}
 
 			$label = 'ga4' === $type ? 'GA4' : 'Google Tag Manager';
@@ -256,6 +278,8 @@ class GDPR_Cookie_Compliance_Migration {
 
 		if ( isset( $source['moove_gdpr_infobar_position'] ) ) {
 			$candidates['cookie_notice_position'] = 'left' === $source['moove_gdpr_infobar_position'] ? 'bottom-left' : 'bottom-right';
+			// Left/right positioning only applies to the box layout.
+			$candidates['cookie_notice_layout'] = 'box';
 		}
 
 		$migrated = 0;

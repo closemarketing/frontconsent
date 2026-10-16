@@ -114,7 +114,7 @@ class Settings {
 				<?php else : ?>
 					<p><?php esc_html_e( 'Nothing to import.', 'frontconsent' ); ?></p>
 				<?php endif; ?>
-				<p><?php esc_html_e( 'Deactivate GDPR Cookie Compliance and remove any hard-coded tracking scripts to avoid duplicate banners and scripts.', 'frontconsent' ); ?></p>
+				<p><?php esc_html_e( 'Check that the FrontConsent banner is enabled below, then deactivate GDPR Cookie Compliance and remove any hard-coded tracking scripts to avoid duplicate banners and scripts.', 'frontconsent' ); ?></p>
 			</div>
 			<?php
 			return;
