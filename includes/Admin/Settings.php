@@ -11,6 +11,7 @@
 namespace FrontConsent\Admin;
 
 use FrontConsent\Frontend\CookieNotice;
+use FrontConsent\GDPR_Cookie_Compliance_Migration;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -56,6 +57,82 @@ class Settings {
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'admin_post_frcn_import_gdpr_cookie_compliance', array( $this, 'handle_gdpr_cookie_compliance_import' ) );
+	}
+
+	/**
+	 * Run the GDPR Cookie Compliance importer from its admin-post form.
+	 *
+	 * @return void
+	 */
+	public function handle_gdpr_cookie_compliance_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'frontconsent' ), '', array( 'response' => 403 ) );
+		}
+
+		check_admin_referer( 'frcn_import_gdpr_cookie_compliance' );
+
+		$report = GDPR_Cookie_Compliance_Migration::run();
+		if ( null !== $report ) {
+			set_transient( 'frcn_gdpr_import_report_' . get_current_user_id(), $report, 5 * MINUTE_IN_SECONDS );
+		}
+
+		wp_safe_redirect( admin_url( 'options-general.php?page=' . $this->page_slug ) );
+		exit;
+	}
+
+	/**
+	 * Render the GDPR Cookie Compliance import prompt, or the report of the
+	 * import the current user just ran.
+	 *
+	 * @return void
+	 */
+	private function render_gdpr_import_notice() {
+		$report_key = 'frcn_gdpr_import_report_' . get_current_user_id();
+		$report     = get_transient( $report_key );
+
+		if ( is_array( $report ) ) {
+			delete_transient( $report_key );
+			$labels = array(
+				GDPR_Cookie_Compliance_Migration::STATUS_MIGRATED    => __( 'Imported', 'frontconsent' ),
+				GDPR_Cookie_Compliance_Migration::STATUS_EXISTING    => __( 'Kept existing', 'frontconsent' ),
+				GDPR_Cookie_Compliance_Migration::STATUS_UNSUPPORTED => __( 'Not supported', 'frontconsent' ),
+				GDPR_Cookie_Compliance_Migration::STATUS_REVIEW      => __( 'Needs review', 'frontconsent' ),
+			);
+			?>
+			<div class="notice notice-success">
+				<p><strong><?php esc_html_e( 'GDPR Cookie Compliance import finished.', 'frontconsent' ); ?></strong></p>
+				<?php if ( $report ) : ?>
+					<ul>
+						<?php foreach ( $report as $row ) : ?>
+							<li>
+								<?php echo esc_html( ( $labels[ $row['status'] ] ?? '' ) . ': ' . $row['item'] ); ?>
+								<?php echo '' !== $row['note'] ? esc_html( ' — ' . $row['note'] ) : ''; ?>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+				<?php else : ?>
+					<p><?php esc_html_e( 'Nothing to import.', 'frontconsent' ); ?></p>
+				<?php endif; ?>
+				<p><?php esc_html_e( 'Deactivate GDPR Cookie Compliance and remove any hard-coded tracking scripts to avoid duplicate banners and scripts.', 'frontconsent' ); ?></p>
+			</div>
+			<?php
+			return;
+		}
+
+		if ( ! GDPR_Cookie_Compliance_Migration::has_source_settings() || get_option( GDPR_Cookie_Compliance_Migration::DONE_FLAG ) ) {
+			return;
+		}
+		?>
+		<div class="notice notice-info">
+			<p><?php esc_html_e( 'We found settings from GDPR Cookie Compliance. Import its tracking integrations and banner options into FrontConsent? Existing FrontConsent values are never overwritten and the other plugin is left untouched.', 'frontconsent' ); ?></p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="frcn_import_gdpr_cookie_compliance" />
+				<?php wp_nonce_field( 'frcn_import_gdpr_cookie_compliance' ); ?>
+				<p><button type="submit" class="button button-primary"><?php esc_html_e( 'Import settings', 'frontconsent' ); ?></button></p>
+			</form>
+		</div>
+		<?php
 	}
 
 	/**
@@ -229,6 +306,7 @@ class Settings {
 		}
 
 		$this->render_cache_notice();
+		$this->render_gdpr_import_notice();
 
 		$tabs = array(
 			array(
