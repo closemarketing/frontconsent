@@ -104,7 +104,12 @@ class GDPR_Cookie_Compliance_Migration {
 		$result = self::build( $source, $current );
 
 		update_option( 'frontconsent_settings', $result['settings'] );
-		update_option( self::DONE_FLAG, true, false );
+
+		// Leave the import available for a retry when the source data could
+		// not be read, so the admin can repair it and run it again.
+		if ( $result['complete'] ) {
+			update_option( self::DONE_FLAG, true, false );
+		}
 
 		return $result['report'];
 	}
@@ -115,14 +120,15 @@ class GDPR_Cookie_Compliance_Migration {
 	 *
 	 * @param array $source  Value of the source plugin's option.
 	 * @param array $current Current `frontconsent_settings` value.
-	 * @return array{settings: array, report: array} Merged settings and a report
-	 *                                               of `{item, status, note}` rows.
+	 * @return array{settings: array, report: array, complete: bool} Merged settings,
+	 *                         a report of `{item, status, note}` rows, and whether
+	 *                         the source data was fully readable.
 	 */
 	public static function build( array $source, array $current ) {
 		$report = array();
 		$before = $current;
 
-		self::map_integrations( $source, $current, $report );
+		$complete = self::map_integrations( $source, $current, $report );
 		self::map_banner_settings( $source, $current, $report );
 
 		// A fresh FrontConsent install has the banner disabled; enable it when
@@ -136,6 +142,7 @@ class GDPR_Cookie_Compliance_Migration {
 		return array(
 			'settings' => $current,
 			'report'   => $report,
+			'complete' => $complete,
 		);
 	}
 
@@ -146,13 +153,23 @@ class GDPR_Cookie_Compliance_Migration {
 	 * @param array $source  Source option value.
 	 * @param array $current FrontConsent settings, by reference.
 	 * @param array $report  Report rows, by reference.
-	 * @return void
+	 * @return bool False when the integrations data could not be decoded.
 	 */
 	private static function map_integrations( array $source, array &$current, array &$report ) {
-		$values = array();
+		$values   = array();
+		$readable = true;
 		if ( isset( $source['gdin_values'] ) && is_string( $source['gdin_values'] ) ) {
 			$decoded = json_decode( $source['gdin_values'], true );
 			$values  = is_array( $decoded ) ? $decoded : array();
+
+			if ( ! is_array( $decoded ) && '' !== trim( $source['gdin_values'] ) ) {
+				$readable = false;
+				$report[] = array(
+					'item'   => __( 'Integrations', 'frontconsent' ),
+					'status' => self::STATUS_REVIEW,
+					'note'   => __( 'The integrations data of GDPR Cookie Compliance could not be read. Re-save its settings and run the import again.', 'frontconsent' ),
+				);
+			}
 		}
 
 		$integrations = Frontend\CookieNotice::get_tracking_integrations( $current, true );
@@ -162,6 +179,11 @@ class GDPR_Cookie_Compliance_Migration {
 			// Only the plain `{slug}` keys mark an integration as enabled;
 			// `{slug}_id` rows hold its tracking ID.
 			if ( ! is_string( $slug ) || '_id' === substr( $slug, -3 ) ) {
+				continue;
+			}
+
+			// A falsy selector means the integration is disabled in the source.
+			if ( empty( $value ) ) {
 				continue;
 			}
 
@@ -244,6 +266,8 @@ class GDPR_Cookie_Compliance_Migration {
 		if ( $integrations ) {
 			$current['cookie_notice_tracking_integrations'] = array_values( $integrations );
 		}
+
+		return $readable;
 	}
 
 	/**
@@ -267,6 +291,22 @@ class GDPR_Cookie_Compliance_Migration {
 		foreach ( $text_keys as $source_key => $target_key ) {
 			if ( ! isset( $source[ $source_key ] ) || ! is_string( $source[ $source_key ] ) ) {
 				continue;
+			}
+
+			// Anchors lose their URL when flattened to plain text: keep a
+			// local policy page link through the policy-page setting, and
+			// ask for a manual review otherwise.
+			if ( 'cookie_notice_message' === $target_key && 1 === preg_match( '/<a\s[^>]*href=["\']([^"\']+)["\']/i', $source[ $source_key ], $link ) ) {
+				$page_id = (int) url_to_postid( esc_url_raw( $link[1] ) );
+				if ( $page_id > 0 ) {
+					$candidates['cookie_notice_policy_page_id'] = $page_id;
+				} else {
+					$report[] = array(
+						'item'   => __( 'Banner message link', 'frontconsent' ),
+						'status' => self::STATUS_REVIEW,
+						'note'   => __( 'The banner message contained a link that is not a page of this site and was removed. Set the policy page in FrontConsent if needed.', 'frontconsent' ),
+					);
+				}
 			}
 			$text = trim( sanitize_textarea_field( wp_strip_all_tags( preg_replace( '#</(p|div|li|h[1-6])>|<br\s*/?>#i', "\n", $source[ $source_key ] ) ) ) );
 			if ( '' !== $text ) {

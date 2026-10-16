@@ -156,8 +156,9 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 	public function test_malformed_gdin_values_is_ignored() {
 		$result = Importer::build( array( 'gdin_values' => '{not json' ), array() );
 
-		$this->assertSame( array(), $result['report'] );
+		$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
 		$this->assertSame( array(), $result['settings'] );
+		$this->assertFalse( $result['complete'] );
 	}
 
 	public function test_banner_settings_fill_only_missing_keys() {
@@ -267,5 +268,48 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 		$result = Importer::build( array( 'moove_gdpr_info_bar_content' => '<p>One.</p><p>Two.</p>' ), array() );
 
 		$this->assertSame( "One.\nTwo.", $result['settings']['cookie_notice_message'] );
+	}
+
+	public function test_integration_disabled_in_the_source_is_skipped() {
+		$result = Importer::build(
+			$this->source(
+				array(
+					'ga4'    => 0,
+					'ga4_id' => 'G-ABC123',
+				)
+			),
+			array()
+		);
+
+		$this->assertSame( array(), $result['report'] );
+		$this->assertArrayNotHasKey( 'cookie_notice_tracking_integrations', $result['settings'] );
+	}
+
+	public function test_local_policy_link_sets_the_policy_page_and_foreign_link_is_reported() {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+
+		$result = Importer::build( array( 'moove_gdpr_info_bar_content' => '<p>See <a href="' . get_permalink( $page_id ) . '">policy</a>.</p>' ), array() );
+		$this->assertSame( $page_id, $result['settings']['cookie_notice_policy_page_id'] );
+
+		$result = Importer::build( array( 'moove_gdpr_info_bar_content' => '<p>See <a href="https://example.org/privacy">policy</a>.</p>' ), array() );
+		$this->assertContains( 'needs_review', $this->statuses( $result['report'] ) );
+		$this->assertArrayNotHasKey( 'cookie_notice_policy_page_id', $result['settings'] );
+	}
+
+	public function test_import_stays_available_when_source_data_is_unreadable() {
+		update_option( Importer::SOURCE_OPTION, array( 'gdin_values' => '{not json' ) );
+		delete_option( Importer::DONE_FLAG );
+
+		Importer::run();
+
+		$this->assertFalse( get_option( Importer::DONE_FLAG ) );
+
+		delete_option( Importer::SOURCE_OPTION );
+		delete_option( 'frontconsent_settings' );
 	}
 }
