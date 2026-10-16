@@ -504,9 +504,16 @@ class CookieNotice {
 			type="button"
 			id="frcn-cookie-reopen"
 			class="frcn-cookie-reopen"
+			aria-label="<?php echo esc_attr__( 'Cookie preferences', 'frontconsent' ); ?>"
+			title="<?php echo esc_attr__( 'Cookie preferences', 'frontconsent' ); ?>"
 			hidden
 		>
-			<?php echo esc_html__( 'Cookie preferences', 'frontconsent' ); ?>
+			<svg class="frcn-cookie-reopen__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+				<path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-4-4 1 1 0 0 0-1-1z"></path>
+				<circle cx="8.5" cy="11" r="1" fill="currentColor"></circle>
+				<circle cx="12" cy="16" r="1" fill="currentColor"></circle>
+				<circle cx="15.5" cy="12.5" r="1" fill="currentColor"></circle>
+			</svg>
 		</button>
 		<?php
 	}
