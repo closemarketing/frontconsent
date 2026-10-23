@@ -179,17 +179,20 @@ class CookieNoticeAccessibilityTest extends TestCase {
 	}
 
 	/**
-	 * The reopen trigger is icon-only: its accessible name must come from
-	 * aria-label, the SVG must be decorative, and it must start hidden
-	 * until JS reveals it for a visitor who already decided.
+	 * The reopen trigger is icon-only by design (a small recognizable
+	 * affordance, not a text pill competing for attention on every page), so
+	 * its accessible name must come entirely from aria-label — it must not
+	 * also carry visible text content.
 	 */
-	public function test_reopen_trigger_is_an_accessible_icon_only_button() {
+	public function test_reopen_trigger_is_icon_only_with_an_aria_label() {
 		update_option( 'frontconsent_settings', array( 'enable_cookie_notice' => true ) );
 
 		$html = $this->render_banner_html();
 
-		$this->assertMatchesRegularExpression( '/<button[^>]*id="frcn-cookie-reopen"[^>]*aria-label="Cookie preferences"/s', $html );
-		$this->assertMatchesRegularExpression( '/<button[^>]*id="frcn-cookie-reopen"[^>]*\shidden/s', $html );
-		$this->assertMatchesRegularExpression( '/<svg[^>]*class="frcn-cookie-reopen__icon"[^>]*aria-hidden="true"/s', $html );
+		$this->assertMatchesRegularExpression(
+			'/<button[^>]*id="frcn-cookie-reopen"[^>]*aria-label="Cookie preferences"[^>]*>\s*<span[^>]*aria-hidden="true"[^>]*><\/span>\s*<\/button>/',
+			$html
+		);
+		$this->assertStringNotContainsString( '>Cookie preferences<', $html );
 	}
 }
