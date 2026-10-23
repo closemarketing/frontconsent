@@ -155,6 +155,51 @@ class CookieNoticePolicyPageTest extends TestCase {
 	}
 
 	/**
+	 * The link's visible text must name its actual destination (the policy
+	 * page's own title) rather than a generic "Learn more" — out of context
+	 * (e.g. a screen reader's "list all links"), "Learn more" gives no
+	 * indication of where the link leads (WCAG 2.4.4).
+	 */
+	public function test_link_text_uses_the_policy_page_title() {
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$html = $this->render_banner_html();
+
+		$this->assertStringContainsString( '>Cookie Policy</a>', $html );
+		$this->assertStringNotContainsString( 'Learn more', $html );
+	}
+
+	/**
+	 * A policy page with no title falls back to the generic label rather
+	 * than rendering an empty link.
+	 */
+	public function test_link_text_falls_back_to_learn_more_when_the_page_has_no_title() {
+		$untitled_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_title'  => '',
+				'post_status' => 'publish',
+			)
+		);
+
+		update_option(
+			'frontconsent_settings',
+			array(
+				'enable_cookie_notice'         => true,
+				'cookie_notice_policy_page_id' => $untitled_page_id,
+			)
+		);
+
+		$other_page_id = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		$this->go_to( get_permalink( $other_page_id ) );
+
+		$html = $this->render_banner_html();
+
+		$this->assertStringContainsString( 'Learn more', $html );
+	}
+
+	/**
 	 * On the configured policy page, the reopen trigger must localize
 	 * isPolicyPage=true and the home URL — otherwise clicking it there would
 	 * clear the decision cookie and reload straight back onto a page where
