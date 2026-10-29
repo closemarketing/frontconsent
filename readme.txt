@@ -50,6 +50,14 @@ The free version keeps a simple aggregate accepted/rejected count. Per-visitor c
 
 Yes. If its settings are found, FrontConsent shows an "Import settings" button on its settings page. It imports Google Analytics 4 and Google Tag Manager IDs from the Integrations tab (including the GTM4WP integration, using the container ID configured in GTM4WP), plus the banner text, button labels, consent expiration and position, without overwriting anything you already configured in FrontConsent. Integrations FrontConsent has no equivalent for (Google Ads, Meta Pixel, Microsoft Advertising, Microsoft Clarity, reCAPTCHA blocker) are listed as not imported. The other plugin is never modified: deactivate it yourself after checking the result.
 
+= Does FrontConsent hold back WooCommerce order attribution cookies? =
+
+Yes. WooCommerce's order attribution scripts (`sourcebuster-js` and `wc-order-attribution`) set `sbjs_*` cookies on the first page view, so FrontConsent keeps them inert and runs them only after the visitor accepts. Use the `frcn_cookie_notice_gated_script_handles` filter to change the list, or return an empty array to disable this.
+
+= GTM4WP sends its own Consent Mode default. Is that a problem? =
+
+FrontConsent already sends a denied default first. To avoid a second, conflicting default (GTM4WP can grant analytics storage), FrontConsent turns GTM4WP's own consent default off. Return false on the `frcn_cookie_notice_suppress_gtm4wp_consent_default` filter to keep it.
+
 == External services ==
 
 This plugin only connects to external services that the site owner explicitly configures — none are contacted by default. All connections below happen entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category; no data is ever sent from the server.

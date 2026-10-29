@@ -43,6 +43,40 @@
 		}
 	}
 
+	function defineActivateGatedHelper() {
+		window.frcnCookieNoticeActivateGated = window.frcnCookieNoticeActivateGated || function (allowedCategories) {
+			if (allowedCategories && !allowedCategories.analytics) {
+				return;
+			}
+
+			var run = function () {
+				var gated = Array.prototype.slice.call(document.querySelectorAll('script[data-frcn-consent=analytics]')).filter(function (node) {
+					return 'text/plain' === node.type;
+				});
+
+				var next = function () {
+					var inert = gated.shift();
+					if (!inert) {
+						return;
+					}
+					var live = document.createElement('script');
+					live.async = false;
+					live.onload = next;
+					live.onerror = next;
+					live.src = inert.src;
+					inert.parentNode.replaceChild(live, inert);
+				};
+				next();
+			};
+
+			if ('loading' === document.readyState) {
+				document.addEventListener('DOMContentLoaded', run);
+			} else {
+				run();
+			}
+		};
+	}
+
 	function defineInjectHelper() {
 		window.frcnCookieNoticeInject = window.frcnCookieNoticeInject || function (gtmId, ga4Id, trackingIntegrations, allowedCategories) {
 			var allowsCategory = function (category) {
@@ -133,6 +167,8 @@
 				window.frcnCookieNoticePendingIntegrations.push(integration);
 			}
 			});
+
+			window.frcnCookieNoticeActivateGated(allowedCategories);
 		};
 	}
 
@@ -230,6 +266,7 @@
 			return;
 		}
 
+		defineActivateGatedHelper();
 		defineInjectHelper();
 
 		var isStale = typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale();
