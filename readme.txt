@@ -54,6 +54,10 @@ Yes. If its settings are found, FrontConsent shows an "Import settings" button o
 
 Yes. WooCommerce's order attribution scripts (`sourcebuster-js` and `wc-order-attribution`) set `sbjs_*` cookies on the first page view, so FrontConsent keeps them inert and runs them only after the visitor accepts. Use the `frcn_cookie_notice_gated_script_handles` filter to change the list, or return an empty array to disable this.
 
+= What happens to analytics cookies when a visitor rejects or withdraws consent? =
+
+FrontConsent deletes them. Rejecting, withdrawing an earlier acceptance from the cookie icon, or visiting again after rejecting removes the known tracking cookies (Google Analytics `_ga`/`_ga_*`/`_gid`/`_gat*`, Google Ads `_gcl_*`, Meta Pixel `_fbp`/`_fbc`, Microsoft Clarity `_clck`/`_clsk`, Brevo `sib_cuid` and WooCommerce `sbjs_*`), including those set on the parent domain. Use the `frcn_cookie_notice_purge_cookies` filter to change the list; an entry ending in `*` matches a prefix.
+
 = GTM4WP sends its own Consent Mode default. Is that a problem? =
 
 FrontConsent already sends a denied default first. To avoid a second, conflicting default (GTM4WP can grant analytics storage), FrontConsent turns GTM4WP's own consent default off. Return false on the `frcn_cookie_notice_suppress_gtm4wp_consent_default` filter to keep it.

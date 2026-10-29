@@ -43,6 +43,57 @@
 		}
 	}
 
+	/**
+	 * Whether a cookie name matches one of the purge patterns: an exact name
+	 * ('_gid') or a prefix ending in '*' ('_ga_*').
+	 */
+	function matchesPurgePattern(name, patterns) {
+		return patterns.some(function (pattern) {
+			if ('*' === pattern.charAt(pattern.length - 1)) {
+				return 0 === name.indexOf(pattern.slice(0, -1));
+			}
+
+			return name === pattern;
+		});
+	}
+
+	/**
+	 * Delete the analytics/marketing cookies a tracking script may already
+	 * have written (see CookieNotice::get_purge_cookie_patterns()). Rejecting
+	 * or withdrawing consent only stops new tags from loading; without this,
+	 * cookies set while consent was granted (e.g. `_ga`) would stay on the
+	 * visitor's device. Each cookie is expired with no domain and with every
+	 * parent domain of the current host, since tags such as GA set theirs
+	 * on the registrable domain ('.example.com') rather than the exact host.
+	 */
+	function purgeTrackingCookies() {
+		var patterns = Array.isArray(frcnCookieNotice.purgeCookies) ? frcnCookieNotice.purgeCookies : [];
+
+		if (!patterns.length || !document.cookie) {
+			return;
+		}
+
+		var hostname = window.location && window.location.hostname ? window.location.hostname : '';
+		var labels = hostname.split('.');
+		var domains = [''];
+
+		for (var i = 0; i < labels.length - 1; i++) {
+			domains.push('; domain=.' + labels.slice(i).join('.'));
+		}
+
+		document.cookie.split('; ').forEach(function (pair) {
+			var name = pair.split('=')[0];
+
+			if (!name || name === frcnCookieNotice.cookieName || !matchesPurgePattern(name, patterns)) {
+				return;
+			}
+
+			domains.forEach(function (domain) {
+				document.cookie = name + '=; path=/; max-age=0' + domain;
+			});
+		});
+	}
+
 	function defineActivateGatedHelper() {
 		window.frcnCookieNoticeActivateGated = window.frcnCookieNoticeActivateGated || function (allowedCategories) {
 			if (allowedCategories && !allowedCategories.analytics) {
@@ -333,6 +384,9 @@
 		reopenTriggerWired = true;
 		reopenBtn.addEventListener('click', function () {
 			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
+			// Withdrawing consent must not leave behind what was set while it
+			// was granted: the page reloads undecided, so nothing is allowed.
+			purgeTrackingCookies();
 
 			if (frcnCookieNotice.isPolicyPage && frcnCookieNotice.homeUrl) {
 				window.location.href = frcnCookieNotice.homeUrl;
@@ -359,6 +413,13 @@
 
 		requestTrackingIfNeeded();
 		setUpReopenTrigger();
+
+		// A rejected visitor may still carry cookies from before the decision
+		// (an earlier acceptance, or a tag that ran before FrontConsent was
+		// installed): clear them on every page view.
+		if (readCookie(frcnCookieNotice.cookieName) === 'rejected') {
+			purgeTrackingCookies();
+		}
 
 		var banner = document.getElementById('frcn-cookie-notice');
 
@@ -530,6 +591,8 @@
 
 			if (decision === 'accepted') {
 				fetchAndInjectScripts();
+			} else {
+				purgeTrackingCookies();
 			}
 		}
 
