@@ -3,8 +3,8 @@ Contributors: davidperez, sacrajaimez, alexcm13, closetechnology
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 1.0.1
-Version: 1.0.1
+Stable tag: 1.0.2
+Version: 1.0.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,12 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= 1.0.2 =
+* Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.
+* The "Cookie preferences" reopen trigger is now an icon-only cookie button (accessible name via `aria-label`), and stays hidden until the visitor has made a consent decision.
+* The "Learn more" link now uses the policy page's own title (WCAG 2.4.4) and keeps readable hover/focus colors regardless of the theme's link styles.
+* Tracking cookies already set (Google Analytics, Google Ads, Meta Pixel, Microsoft Clarity, Brevo, WooCommerce `sbjs_*`) are now deleted, including on the parent domain, when the visitor rejects or withdraws consent. The list can be changed with the `frcn_cookie_notice_purge_cookies` filter.
 
 = 1.0.1 =
 * Settings page now uses tabs, so a companion plugin can add its own tab via the new `frontconsent_settings_tabs` filter, rendering its panel on either `frontconsent_settings_form_tab_panels` (fields saved through the main settings form) or `frontconsent_settings_tab_panels` (a panel with its own form, e.g. FrontConsent PRO's License tab).
