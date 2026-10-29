@@ -122,6 +122,44 @@ class CookieNotice {
 	}
 
 	/**
+	 * Cookie names deleted client-side when the visitor rejects or withdraws
+	 * consent. An entry ending in '*' matches every cookie starting with that
+	 * prefix. Covers the tags FrontConsent loads itself (GTM/GA4, Brevo) plus
+	 * the common ones a GTM container or gated script tends to add.
+	 *
+	 * @return string[]
+	 */
+	public static function get_purge_cookie_patterns() {
+		$patterns = array(
+			// Google Analytics and Google Ads.
+			'_ga',
+			'_ga_*',
+			'_gid',
+			'_gat*',
+			'_gcl_*',
+			// Meta Pixel.
+			'_fbp',
+			'_fbc',
+			// Microsoft Clarity.
+			'_clck',
+			'_clsk',
+			// Brevo.
+			'sib_cuid',
+			// WooCommerce order attribution (sourcebuster).
+			'sbjs_*',
+		);
+
+		/**
+		 * Filters the cookies deleted when the visitor rejects or withdraws consent.
+		 *
+		 * @param string[] $patterns Cookie names; a trailing '*' matches a prefix.
+		 */
+		$patterns = apply_filters( 'frcn_cookie_notice_purge_cookies', $patterns );
+
+		return is_array( $patterns ) ? array_values( array_filter( array_map( 'strval', $patterns ) ) ) : array();
+	}
+
+	/**
 	 * Turn a gated script's tag into an inert one. The tag is always printed,
 	 * identically for every visitor (cache-neutral, like the rest of the
 	 * banner); JS runs it once consent is accepted.
@@ -440,6 +478,7 @@ class CookieNotice {
 				// home, where the banner is guaranteed to render.
 				'isPolicyPage'   => $this->is_policy_page(),
 				'homeUrl'        => home_url( '/' ),
+				'purgeCookies'   => self::get_purge_cookie_patterns(),
 			)
 		);
 
