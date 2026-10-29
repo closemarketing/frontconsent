@@ -81,6 +81,8 @@ class CookieNotice {
 			add_action( 'wp_head', array( $this, 'render_consent_bootstrap_script' ), 2 );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 			add_action( 'wp_footer', array( $this, 'render_banner' ) );
+			add_filter( 'script_loader_tag', array( $this, 'gate_analytics_scripts' ), 10, 2 );
+			add_filter( 'gtm4wp_consent_mode_default_enabled', array( $this, 'filter_gtm4wp_consent_default' ) );
 		}
 
 		// The endpoints must stay available for logged-out and logged-in visitors alike.
@@ -97,6 +99,63 @@ class CookieNotice {
 		// run, so this handler only ever runs for a visitor without JavaScript.
 		add_action( 'admin_post_frcn_log_cookie_decision', array( $this, 'log_consent_form_callback' ) );
 		add_action( 'admin_post_nopriv_frcn_log_cookie_decision', array( $this, 'log_consent_form_callback' ) );
+	}
+
+	/**
+	 * Script handles that set analytics/attribution cookies on their own and
+	 * must therefore wait for consent. WooCommerce's order attribution
+	 * (sourcebuster) writes its `sbjs_*` cookies on every first page view.
+	 *
+	 * @return string[]
+	 */
+	public static function get_gated_script_handles() {
+		/**
+		 * Filters the script handles held back until the visitor accepts.
+		 *
+		 * Return an empty array to stop FrontConsent from gating any script.
+		 *
+		 * @param string[] $handles Registered script handles.
+		 */
+		$handles = apply_filters( 'frcn_cookie_notice_gated_script_handles', array( 'sourcebuster-js', 'wc-order-attribution' ) );
+
+		return is_array( $handles ) ? array_map( 'strval', $handles ) : array();
+	}
+
+	/**
+	 * Turn a gated script's tag into an inert one. The tag is always printed,
+	 * identically for every visitor (cache-neutral, like the rest of the
+	 * banner); JS runs it once consent is accepted.
+	 *
+	 * @param string $tag    Script tag HTML.
+	 * @param string $handle Script handle.
+	 * @return string
+	 */
+	public function gate_analytics_scripts( $tag, $handle ) {
+		if ( ! in_array( $handle, self::get_gated_script_handles(), true ) ) {
+			return $tag;
+		}
+
+		$tag = preg_replace( '/\stype=(["\'])[^"\']*\1/i', '', (string) $tag );
+
+		return preg_replace( '/^<script\b/i', '<script type="text/plain" data-frcn-consent="analytics"', (string) $tag, 1 );
+	}
+
+	/**
+	 * Stop GTM4WP from sending its own Consent Mode "default" command (it can
+	 * grant analytics storage before consent): FrontConsent already sends the
+	 * denied default first, and a second source makes the result depend on
+	 * ordering.
+	 *
+	 * @param bool $enabled Whether GTM4WP outputs its consent default.
+	 * @return bool
+	 */
+	public function filter_gtm4wp_consent_default( $enabled ) {
+		/**
+		 * Filters whether FrontConsent suppresses GTM4WP's consent default.
+		 *
+		 * @param bool $suppress True to suppress (default).
+		 */
+		return apply_filters( 'frcn_cookie_notice_suppress_gtm4wp_consent_default', true ) ? false : $enabled;
 	}
 
 	/**
@@ -824,6 +883,38 @@ class CookieNotice {
 				}
 			}
 
+			window.frcnCookieNoticeActivateGated = window.frcnCookieNoticeActivateGated || function ( allowedCategories ) {
+				if ( allowedCategories && ! allowedCategories.analytics ) {
+					return;
+				}
+
+				var run = function () {
+					var gated = Array.prototype.slice.call( document.querySelectorAll( 'script[data-frcn-consent=analytics]' ) ).filter( function ( node ) {
+						return 'text/plain' === node.type;
+					} );
+
+					var next = function () {
+						var inert = gated.shift();
+						if ( ! inert ) {
+							return;
+						}
+						var live = document.createElement( 'script' );
+						live.async = false;
+						live.onload = next;
+						live.onerror = next;
+						live.src = inert.src;
+						inert.parentNode.replaceChild( live, inert );
+					};
+					next();
+				};
+
+				if ( 'loading' === document.readyState ) {
+					document.addEventListener( 'DOMContentLoaded', run );
+				} else {
+					run();
+				}
+			};
+
 			window.frcnCookieNoticeInject = window.frcnCookieNoticeInject || function ( gtmId, ga4Id, trackingIntegrations, allowedCategories ) {
 				var allowsCategory = function ( category ) {
 					return ! allowedCategories || !! allowedCategories[ category ];
@@ -913,6 +1004,8 @@ class CookieNotice {
 					window.frcnCookieNoticePendingIntegrations.push( integration );
 					}
 				} );
+
+				window.frcnCookieNoticeActivateGated( allowedCategories );
 			};
 
 			// An add-on tracking per-category consent can define this (printed
