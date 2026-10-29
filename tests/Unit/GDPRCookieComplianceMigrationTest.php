@@ -233,13 +233,53 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 	}
 
 	public function test_unknown_enabled_integration_is_reported() {
-		$result = Importer::build( $this->source( array( 'gtm4wp' => 2 ) ), array() );
+		$result = Importer::build( $this->source( array( 'somethingnew' => 2 ) ), array() );
 
 		$this->assertSame( array( 'unsupported' ), $this->statuses( $result['report'] ) );
 		$this->assertArrayNotHasKey( 'enable_cookie_notice', $result['settings'] );
+	}
 
-		$result = Importer::build( $this->source( array( 'somethingnew' => 2 ) ), array() );
-		$this->assertSame( array( 'unsupported' ), $this->statuses( $result['report'] ) );
+	public function test_gtm4wp_container_is_imported_as_gtm() {
+		$result = Importer::build(
+			$this->source( array( 'gtm4wp' => 2 ) ),
+			array(),
+			array(
+				'gtm-code'           => 'GTM-TWKQP7Z',
+				'gtm-code-placement' => 3,
+			)
+		);
+
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'gtm',
+					'id'   => 'GTM-TWKQP7Z',
+				),
+			),
+			$result['settings']['cookie_notice_tracking_integrations']
+		);
+		$this->assertSame( array( 'migrated' ), $this->statuses( $result['report'] ) );
+	}
+
+	public function test_gtm4wp_still_placing_the_container_is_flagged_for_review() {
+		$result = Importer::build(
+			$this->source( array( 'gtm4wp' => 2 ) ),
+			array(),
+			array(
+				'gtm-containers'     => array( array( 'id' => 'gtm-abc123' ), array( 'id' => 'GTM-OTHER1' ) ),
+				'gtm-code-placement' => 0,
+			)
+		);
+
+		$this->assertSame( 'GTM-ABC123', $result['settings']['cookie_notice_tracking_integrations'][0]['id'] );
+		$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
+	}
+
+	public function test_gtm4wp_without_a_container_id_is_reported_and_not_imported() {
+		$result = Importer::build( $this->source( array( 'gtm4wp' => 2 ) ), array(), array() );
+
+		$this->assertArrayNotHasKey( 'cookie_notice_tracking_integrations', $result['settings'] );
+		$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
 	}
 
 	public function test_consent_mode_gtm_alone_enables_the_banner() {

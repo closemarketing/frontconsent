@@ -73,7 +73,6 @@ class GDPR_Cookie_Compliance_Migration {
 			'fbp'       => __( 'Meta Pixel', 'frontconsent' ),
 			'muet'      => __( 'Microsoft Advertising (UET)', 'frontconsent' ),
 			'clarity'   => __( 'Microsoft Clarity', 'frontconsent' ),
-			'gtm4wp'    => __( 'GTM4WP (Google Tag Manager for WordPress)', 'frontconsent' ),
 			'recaptcha' => __( 'Google reCAPTCHA blocker', 'frontconsent' ),
 		);
 	}
@@ -101,7 +100,8 @@ class GDPR_Cookie_Compliance_Migration {
 		$current = get_option( 'frontconsent_settings', array() );
 		$current = is_array( $current ) ? $current : array();
 
-		$result = self::build( $source, $current );
+		$gtm4wp = get_option( 'gtm4wp-options', array() );
+		$result = self::build( $source, $current, is_array( $gtm4wp ) ? $gtm4wp : array() );
 
 		update_option( 'frontconsent_settings', $result['settings'] );
 
@@ -120,15 +120,17 @@ class GDPR_Cookie_Compliance_Migration {
 	 *
 	 * @param array $source  Value of the source plugin's option.
 	 * @param array $current Current `frontconsent_settings` value.
+	 * @param array $gtm4wp  Value of GTM4WP's `gtm4wp-options` option, used to
+	 *                       resolve the container ID behind the `gtm4wp` integration.
 	 * @return array{settings: array, report: array, complete: bool} Merged settings,
 	 *                         a report of `{item, status, note}` rows, and whether
 	 *                         the source data was fully readable.
 	 */
-	public static function build( array $source, array $current ) {
+	public static function build( array $source, array $current, array $gtm4wp = array() ) {
 		$report = array();
 		$before = $current;
 
-		$complete = self::map_integrations( $source, $current, $report );
+		$complete = self::map_integrations( $source, $current, $report, $gtm4wp );
 		self::map_banner_settings( $source, $current, $report );
 
 		// A fresh FrontConsent install has the banner disabled; enable it when
@@ -153,9 +155,10 @@ class GDPR_Cookie_Compliance_Migration {
 	 * @param array $source  Source option value.
 	 * @param array $current FrontConsent settings, by reference.
 	 * @param array $report  Report rows, by reference.
+	 * @param array $gtm4wp  GTM4WP options.
 	 * @return bool False when the integrations data could not be decoded.
 	 */
-	private static function map_integrations( array $source, array &$current, array &$report ) {
+	private static function map_integrations( array $source, array &$current, array &$report, array $gtm4wp = array() ) {
 		$values   = array();
 		$readable = true;
 		if ( isset( $source['gdin_values'] ) && is_string( $source['gdin_values'] ) ) {
@@ -193,6 +196,11 @@ class GDPR_Cookie_Compliance_Migration {
 					'status' => self::STATUS_UNSUPPORTED,
 					'note'   => __( 'FrontConsent has no equivalent integration yet and it was not imported. Do not hard-code its script (it would run before consent); load it through Google Tag Manager with consent-aware triggers instead.', 'frontconsent' ),
 				);
+				continue;
+			}
+
+			if ( 'gtm4wp' === $slug ) {
+				self::map_gtm4wp( $gtm4wp, $integrations, $report );
 				continue;
 			}
 
@@ -383,6 +391,81 @@ class GDPR_Cookie_Compliance_Migration {
 				'note'   => sprintf( _n( '%d setting was already configured in FrontConsent and was kept.', '%d settings were already configured in FrontConsent and were kept.', $existing, 'frontconsent' ), $existing ),
 			);
 		}
+	}
+
+	/**
+	 * Map the `gtm4wp` integration: the source plugin gates the container that
+	 * GTM4WP is configured with, so the container ID is read from GTM4WP's own
+	 * options and imported as a regular GTM integration.
+	 *
+	 * @param array $gtm4wp       GTM4WP options.
+	 * @param array $integrations Tracking integrations, by reference.
+	 * @param array $report       Report rows, by reference.
+	 * @return void
+	 */
+	private static function map_gtm4wp( array $gtm4wp, array &$integrations, array &$report ) {
+		$label = __( 'GTM4WP (Google Tag Manager for WordPress)', 'frontconsent' );
+		$ids   = array_map( 'trim', explode( ',', (string) ( $gtm4wp['gtm-code'] ?? '' ) ) );
+
+		if ( isset( $gtm4wp['gtm-containers'] ) && is_array( $gtm4wp['gtm-containers'] ) ) {
+			foreach ( $gtm4wp['gtm-containers'] as $container ) {
+				if ( is_array( $container ) && ! empty( $container['id'] ) ) {
+					$ids[] = (string) $container['id'];
+				}
+			}
+		}
+
+		$ids = array_values(
+			array_unique(
+				array_filter(
+					array_map( 'strtoupper', array_map( 'sanitize_text_field', $ids ) ),
+					static function ( $id ) {
+						return 1 === preg_match( '/^GTM-[A-Z0-9]+$/', $id );
+					}
+				)
+			)
+		);
+
+		if ( ! $ids ) {
+			$report[] = array(
+				'item'   => $label,
+				'status' => self::STATUS_REVIEW,
+				'note'   => __( 'No GTM container ID was found in the GTM4WP settings, so nothing was imported. Add the container ID in FrontConsent manually.', 'frontconsent' ),
+			);
+			return;
+		}
+
+		if ( self::has_integration_type( $integrations, 'gtm' ) ) {
+			$report[] = array(
+				'item'   => $label,
+				'status' => self::STATUS_EXISTING,
+				'note'   => __( 'FrontConsent already has a Google Tag Manager container configured.', 'frontconsent' ),
+			);
+			return;
+		}
+
+		$integrations[] = array(
+			'type' => 'gtm',
+			'id'   => $ids[0],
+		);
+
+		$placement_off = defined( 'GTM4WP_PLACEMENT_OFF' ) ? (int) GTM4WP_PLACEMENT_OFF : 3;
+		$placement     = isset( $gtm4wp['gtm-code-placement'] ) ? (int) $gtm4wp['gtm-code-placement'] : 0;
+		$notes         = array();
+
+		if ( $placement_off !== $placement ) {
+			$notes[] = __( 'GTM4WP still places the container itself. Set its container code placement to "Off" so FrontConsent is the only one loading it, after consent.', 'frontconsent' );
+		}
+
+		if ( count( $ids ) > 1 ) {
+			$notes[] = __( 'GTM4WP has several containers; only the first was imported.', 'frontconsent' );
+		}
+
+		$report[] = array(
+			'item'   => $label . ' (' . $ids[0] . ')',
+			'status' => $notes ? self::STATUS_REVIEW : self::STATUS_MIGRATED,
+			'note'   => implode( ' ', $notes ),
+		);
 	}
 
 	/**

@@ -48,7 +48,7 @@ The free version keeps a simple aggregate accepted/rejected count. Per-visitor c
 
 = Can I import my settings from GDPR Cookie Compliance? =
 
-Yes. If its settings are found, FrontConsent shows an "Import settings" button on its settings page. It imports Google Analytics 4 and Google Tag Manager IDs from the Integrations tab, plus the banner text, button labels, consent expiration and position, without overwriting anything you already configured in FrontConsent. Integrations FrontConsent has no equivalent for (Google Ads, Meta Pixel, Microsoft Advertising, Microsoft Clarity, reCAPTCHA blocker) are listed as not imported. The other plugin is never modified: deactivate it yourself after checking the result.
+Yes. If its settings are found, FrontConsent shows an "Import settings" button on its settings page. It imports Google Analytics 4 and Google Tag Manager IDs from the Integrations tab (including the GTM4WP integration, using the container ID configured in GTM4WP), plus the banner text, button labels, consent expiration and position, without overwriting anything you already configured in FrontConsent. Integrations FrontConsent has no equivalent for (Google Ads, Meta Pixel, Microsoft Advertising, Microsoft Clarity, reCAPTCHA blocker) are listed as not imported. The other plugin is never modified: deactivate it yourself after checking the result.
 
 == External services ==
 
