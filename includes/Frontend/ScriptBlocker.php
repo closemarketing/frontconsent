@@ -117,9 +117,7 @@ class ScriptBlocker {
 			return;
 		}
 
-		$rules = self::get_rules();
-
-		if ( empty( $rules ) ) {
+		if ( empty( self::get_rules() ) && ! self::use_privacy_enhanced_embeds() ) {
 			return;
 		}
 
@@ -129,11 +127,77 @@ class ScriptBlocker {
 	/**
 	 * Ob_start() callback: rewrite the buffered HTML.
 	 *
+	 * Blocking rules run first, against each embed's original src, so a rule
+	 * such as "youtube.com/embed" still matches; whatever is left loading
+	 * immediately is then switched to its privacy-enhanced form.
+	 *
 	 * @param string $html Buffered HTML output.
 	 * @return string Rewritten HTML.
 	 */
 	public function rewrite_buffer( $html ) {
-		return self::rewrite_html( $html, self::get_rules() );
+		$html = self::rewrite_html( $html, self::get_rules() );
+
+		if ( self::use_privacy_enhanced_embeds() ) {
+			$html = self::rewrite_privacy_enhanced_embeds( $html );
+		}
+
+		return $html;
+	}
+
+	/**
+	 * Whether YouTube/Vimeo iframes are switched to their cookieless modes.
+	 *
+	 * @return bool
+	 */
+	public static function use_privacy_enhanced_embeds() {
+		/**
+		 * Filters whether FrontConsent rewrites YouTube embeds to
+		 * youtube-nocookie.com and adds Vimeo's "dnt=1" (do not track) flag,
+		 * so neither sets cookies before the visitor decides.
+		 *
+		 * @param bool $enabled Default true.
+		 */
+		return (bool) apply_filters( 'frcn_privacy_enhanced_embeds', true );
+	}
+
+	/**
+	 * Switch YouTube and Vimeo iframes to their cookieless modes: YouTube's
+	 * privacy-enhanced youtube-nocookie.com domain, and Vimeo's dnt=1 flag.
+	 * Only <iframe> opening tags are touched, and every URL-carrying
+	 * attribute in them (src, plus lazy-load copies such as data-src or
+	 * data-lazy-src) is rewritten, so lazy-loaded embeds are covered too.
+	 *
+	 * Public static so it's directly unit-testable.
+	 *
+	 * @param string $html HTML to scan.
+	 * @return string Rewritten HTML.
+	 */
+	public static function rewrite_privacy_enhanced_embeds( $html ) {
+		if ( '' === $html || false === stripos( $html, '<iframe' ) || ( false === stripos( $html, 'youtube.com/embed' ) && false === stripos( $html, 'player.vimeo.com/video' ) ) ) {
+			return $html;
+		}
+
+		return (string) preg_replace_callback(
+			'/<iframe\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>/i',
+			function ( $matches ) {
+				$tag = preg_replace( '#(//)(?:www\.)?youtube\.com/embed/#i', '$1www.youtube-nocookie.com/embed/', $matches[0] );
+
+				return (string) preg_replace_callback(
+					'#(player\.vimeo\.com/video/[^"\'\s>]*)#i',
+					function ( $vimeo ) {
+						$url = $vimeo[1];
+
+						if ( preg_match( '/(?:\?|&amp;|&)dnt=/i', $url ) ) {
+							return $url;
+						}
+
+						return $url . ( false === strpos( $url, '?' ) ? '?' : '&amp;' ) . 'dnt=1';
+					},
+					(string) $tag
+				);
+			},
+			$html
+		);
 	}
 
 	/**

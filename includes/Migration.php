@@ -34,6 +34,14 @@ class Migration {
 	const DONE_FLAG = 'frcn_migrated_from_frontblocks';
 
 	/**
+	 * Option name flagging that FrontBlocks PRO's legacy cookie categories
+	 * module was already switched off (see maybe_disable_frontblocks_pro_categories()).
+	 *
+	 * @var string
+	 */
+	const PRO_CATEGORIES_DONE_FLAG = 'frcn_disabled_frontblocks_pro_categories';
+
+	/**
 	 * Keys copied verbatim from FrontBlocks' `frontblocks_settings` option
 	 * into FrontConsent's own settings, when present.
 	 *
@@ -249,5 +257,34 @@ class Migration {
 
 		$legacy_settings['enable_cookie_notice'] = false;
 		update_option( 'frontblocks_settings', $legacy_settings );
+	}
+
+	/**
+	 * Turn off FrontBlocks PRO's "advanced cookie" categories module, once.
+	 *
+	 * That module hooks FrontBlocks' own `frbl_cookie_notice_*` actions, which
+	 * never fire once FrontConsent replaces FrontBlocks' banner — so it still
+	 * prints its categories dialog in the footer but its "Customize" button
+	 * never appears, leaving visitors with no way to choose per category.
+	 * FrontConsent now ships its own preferences panel with Analytics and
+	 * Marketing toggles, so the legacy module is disabled instead of left
+	 * half-working next to it. Separate from maybe_run() (and its own flag)
+	 * because sites that already migrated must get this too.
+	 *
+	 * @return void
+	 */
+	public static function maybe_disable_frontblocks_pro_categories() {
+		if ( ! add_option( self::PRO_CATEGORIES_DONE_FLAG, true, '', 'no' ) ) {
+			return;
+		}
+
+		$pro_settings = get_option( 'frontblocks_pro_cookie_settings', null );
+
+		if ( ! is_array( $pro_settings ) || empty( $pro_settings['enable'] ) ) {
+			return;
+		}
+
+		$pro_settings['enable'] = false;
+		update_option( 'frontblocks_pro_cookie_settings', $pro_settings );
 	}
 }

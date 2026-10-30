@@ -89,6 +89,11 @@ Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-
 
 = Unreleased =
 * Added generic Script & Iframe Blocking: a settings-configured list of match-pattern/category rules holds back any matching `<script src="...">` or `<iframe src="...">` on the page (YouTube, Maps, social widgets, custom tracking snippets, etc.) until the visitor accepts, complementing the existing Google Consent Mode v2 support.
+* Added a "Customize cookie settings" button (left of Reject/Accept, showing the cookie icon) that opens a cookie preferences dialog with Accept all / Reject all / Save changes actions and a static "Strictly necessary" section, also reachable from the persistent "Cookie preferences" reopen trigger. Every action records the exact same consent cookie, Consent Mode update and logging as the existing Accept/Reject buttons.
+* Added PRO-ready extension points so a future FrontConsent PRO add-on can render per-category consent (Analytics, Marketing, etc.) into the same panel without forking markup: the `frcn_cookie_preferences_categories` action, the `frcn_cookie_consent_categories` filter, and the `frcn_cookie_customize_button_label`/`frcn_cookie_customize_button_enabled` filters. Documented in `docs/preferences-panel-hooks.md`.
+* The preferences panel now has real Analytics and Marketing toggles. Each category independently gates its tracking integrations, its Google Consent Mode signals (`analytics_storage` / `ad_*`), the script/iframe blocker and the cookies deleted on rejection; lowering an earlier choice reloads the page so tags already running stop. The `frcn_cookie_notice_analytics_cookies` filter sets which purge patterns count as Analytics.
+* YouTube embeds now load from `youtube-nocookie.com` and Vimeo embeds get `dnt=1`, so videos set no cookies before consent. Turn it off with the `frcn_privacy_enhanced_embeds` filter.
+* FrontBlocks PRO's legacy cookie categories module is switched off once on update: it only hooked FrontBlocks' retired banner, so under FrontConsent it printed a categories dialog nobody could open.
 
 = 1.0.2 =
 * Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.

@@ -7,7 +7,9 @@ const vm = require('node:vm');
 const scriptPath = path.resolve(__dirname, '../../assets/cookie-notice/frontconsent-cookie-notice.js');
 const cookieNoticeScript = fs.readFileSync(scriptPath, 'utf8');
 
-const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', 'sbjs_*'];
+const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', '_fbp', 'sbjs_*'];
+const ANALYTICS_COOKIES = ['_ga', '_ga_*', '_gid'];
+const CATEGORIES_COOKIE = 'frontconsent_categories';
 
 /**
  * Minimal cookie jar keyed by name + domain, so a cookie set on
@@ -69,6 +71,28 @@ function createEnvironment(initialCookies) {
 		hidden: true,
 		addEventListener(event, callback) { reopenListeners[event] = callback; }
 	};
+	const panelListeners = {};
+	const toggles = ['analytics', 'marketing'].map((category) => ({
+		checked: false,
+		getAttribute() { return category; }
+	}));
+	const preferencesPanel = {
+		hidden: true,
+		querySelector(selector) {
+			const actionMatch = selector.match(/^\[data-frcn-cookie-action="([a-z-]+)"\]$/);
+			if (actionMatch) {
+				return {
+					addEventListener(event, callback) {
+						panelListeners[actionMatch[1]] = callback;
+					}
+				};
+			}
+			return null;
+		},
+		querySelectorAll(selector) {
+			return '[data-frcn-category]' === selector ? toggles : [];
+		}
+	};
 	const document = {
 		activeElement: null,
 		body: { classList: { add() {}, remove() {} } },
@@ -79,7 +103,15 @@ function createEnvironment(initialCookies) {
 		addEventListener(event, callback) { listeners[event] = callback; },
 		createElement() { return {}; },
 		dispatchEvent() {},
-		getElementById(id) { return id === 'frcn-cookie-reopen' ? reopenBtn : banner; },
+		getElementById(id) {
+			if ('frcn-cookie-reopen' === id) {
+				return reopenBtn;
+			}
+			if ('frcn-cookie-preferences' === id) {
+				return preferencesPanel;
+			}
+			return banner;
+		},
 		getElementsByTagName() { return []; },
 		querySelectorAll() { return []; },
 		removeEventListener() {}
@@ -101,17 +133,19 @@ function createEnvironment(initialCookies) {
 		frcnCookieNotice: {
 			ajaxUrl: 'https://www.example.com/wp-admin/admin-ajax.php',
 			cookieName: 'frcn_cookie_consent',
+			categoriesCookieName: CATEGORIES_COOKIE,
 			cookiePath: '/',
 			expirationDays: 365,
 			isPolicyPage: '',
 			homeUrl: 'https://www.example.com/',
-			purgeCookies: PURGE_COOKIES
+			purgeCookies: PURGE_COOKIES,
+			analyticsCookies: ANALYTICS_COOKIES
 		},
 		window
 	});
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners };
+	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), panelListeners, reopenListeners, toggles };
 }
 
 test('rejecting deletes tracking cookies set on the host and on parent domains', () => {
@@ -125,7 +159,7 @@ test('rejecting deletes tracking cookies set on the host and on parent domains',
 
 	environment.actionListeners.reject({ preventDefault() {} });
 
-	assert.deepEqual(environment.cookieNames().sort(), ['frcn_cookie_consent', 'woocommerce_items_in_cart']);
+	assert.deepEqual(environment.cookieNames().sort(), ['frcn_cookie_consent', CATEGORIES_COOKIE, 'woocommerce_items_in_cart']);
 });
 
 test('accepting keeps tracking cookies', () => {
@@ -145,7 +179,7 @@ test('a returning rejected visitor has leftover tracking cookies cleared on page
 	assert.deepEqual(environment.cookieNames(), ['frcn_cookie_consent']);
 });
 
-test('withdrawing an earlier acceptance deletes tracking cookies', () => {
+test('withdrawing an earlier acceptance from the preferences panel deletes tracking cookies', () => {
 	const environment = createEnvironment([
 		['frcn_cookie_consent', 'accepted', ''],
 		['_ga', 'GA1.1.1', '.example.com'],
@@ -154,6 +188,32 @@ test('withdrawing an earlier acceptance deletes tracking cookies', () => {
 
 	assert.ok(environment.cookieNames().includes('_ga'));
 	environment.reopenListeners.click();
+	environment.panelListeners.reject();
 
-	assert.deepEqual(environment.cookieNames(), []);
+	assert.deepEqual(environment.cookieNames().sort(), ['frcn_cookie_consent', CATEGORIES_COOKIE]);
+});
+
+test('saving Analytics only keeps analytics cookies and deletes marketing ones', () => {
+	const environment = createEnvironment([
+		['_ga', 'GA1.1.1', '.example.com'],
+		['_fbp', 'fb.1.1', '.example.com']
+	]);
+
+	environment.toggles[0].checked = true;
+	environment.panelListeners.save();
+
+	assert.ok(environment.cookieNames().includes('_ga'));
+	assert.ok(!environment.cookieNames().includes('_fbp'));
+});
+
+test('a returning Analytics-only visitor keeps _ga on page load', () => {
+	const environment = createEnvironment([
+		['frcn_cookie_consent', 'accepted', ''],
+		[CATEGORIES_COOKIE, encodeURIComponent(JSON.stringify({ necessary: true, analytics: true, marketing: false })), ''],
+		['_ga', 'GA1.1.1', '.example.com'],
+		['_fbp', 'fb.1.1', '.example.com']
+	]);
+
+	assert.ok(environment.cookieNames().includes('_ga'));
+	assert.ok(!environment.cookieNames().includes('_fbp'));
 });

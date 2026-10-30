@@ -248,4 +248,60 @@ class ScriptBlockerTest extends TestCase {
 			$rules
 		);
 	}
+
+	/**
+	 * A youtube.com embed is switched to the privacy-enhanced
+	 * youtube-nocookie.com domain, including a lazy-loaded copy of the URL.
+	 */
+	public function test_youtube_iframe_is_switched_to_nocookie_domain() {
+		$html = '<iframe src="https://www.youtube.com/embed/abc123?rel=0" data-lazy-src="https://youtube.com/embed/abc123"></iframe>';
+
+		$result = ScriptBlocker::rewrite_privacy_enhanced_embeds( $html );
+
+		$this->assertStringContainsString( 'src="https://www.youtube-nocookie.com/embed/abc123?rel=0"', $result );
+		$this->assertStringContainsString( 'data-lazy-src="https://www.youtube-nocookie.com/embed/abc123"', $result );
+		$this->assertStringNotContainsString( '//www.youtube.com/embed', $result );
+	}
+
+	/**
+	 * A Vimeo player embed gets dnt=1, appended to an existing query string
+	 * when there is one, and is left alone when it already carries it.
+	 */
+	public function test_vimeo_iframe_gets_do_not_track_flag_once() {
+		$this->assertStringContainsString(
+			'src="https://player.vimeo.com/video/123?dnt=1"',
+			ScriptBlocker::rewrite_privacy_enhanced_embeds( '<iframe src="https://player.vimeo.com/video/123"></iframe>' )
+		);
+		$this->assertStringContainsString(
+			'src="https://player.vimeo.com/video/123?h=abc&amp;dnt=1"',
+			ScriptBlocker::rewrite_privacy_enhanced_embeds( '<iframe src="https://player.vimeo.com/video/123?h=abc"></iframe>' )
+		);
+
+		$already = '<iframe src="https://player.vimeo.com/video/123?h=abc&amp;dnt=1"></iframe>';
+		$this->assertSame( $already, ScriptBlocker::rewrite_privacy_enhanced_embeds( $already ) );
+	}
+
+	/**
+	 * Only iframes are rewritten: a plain link to a YouTube video stays as is.
+	 */
+	public function test_youtube_links_outside_iframes_are_untouched() {
+		$html = '<a href="https://www.youtube.com/embed/abc123">Watch</a><iframe src="https://example.com/"></iframe>';
+
+		$this->assertSame( $html, ScriptBlocker::rewrite_privacy_enhanced_embeds( $html ) );
+	}
+
+	/**
+	 * A blocking rule still matches the original youtube.com URL: rules run
+	 * before the nocookie rewrite, so the held-back embed keeps its real src.
+	 */
+	public function test_blocking_rules_run_before_the_nocookie_rewrite() {
+		update_option( 'frontconsent_settings', array( ScriptBlocker::RULES_OPTION_KEY => array( array( 'pattern' => 'youtube.com/embed', 'category' => 'marketing' ) ) ) );
+
+		$result = ( new ScriptBlocker() )->rewrite_buffer( '<iframe src="https://www.youtube.com/embed/abc123"></iframe>' );
+
+		delete_option( 'frontconsent_settings' );
+
+		$this->assertStringContainsString( 'data-frcn-category="marketing"', $result );
+		$this->assertStringContainsString( 'src="about:blank"', $result );
+	}
 }
