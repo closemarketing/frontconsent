@@ -8,6 +8,7 @@
 		"pretest:build-assets": "test -d node_modules || npm ci",
 		"test:build-assets": "node --test tests/js/build-assets.test.js",
 		"pretest:js": "test -d node_modules || npm ci",
+		"test:script-blocker": "node --test tests/js/script-blocker.test.js",
 		"test:js": "node --test tests/js/*.test.js"
 	},
 	"devDependencies": {

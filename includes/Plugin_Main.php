@@ -60,6 +60,9 @@ class Plugin_Main {
 		if ( ! class_exists( 'FrontConsent\Frontend\CookieNotice' ) ) {
 			require_once FRCN_PLUGIN_PATH . 'includes/Frontend/CookieNotice.php';
 		}
+		if ( ! class_exists( 'FrontConsent\Frontend\ScriptBlocker' ) ) {
+			require_once FRCN_PLUGIN_PATH . 'includes/Frontend/ScriptBlocker.php';
+		}
 		if ( ! class_exists( 'FrontConsent\Migration' ) ) {
 			require_once FRCN_PLUGIN_PATH . 'includes/Migration.php';
 		}
@@ -77,6 +80,7 @@ class Plugin_Main {
 		Migration::maybe_run();
 
 		new Frontend\CookieNotice();
+		new Frontend\ScriptBlocker();
 
 		$this->load_modules();
 	}
