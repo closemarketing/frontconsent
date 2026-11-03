@@ -89,6 +89,23 @@ class GDPR_Cookie_Compliance_Migration {
 	}
 
 	/**
+	 * Whether run() is saving the already sanitized settings right now.
+	 *
+	 * @var bool
+	 */
+	private static $saving = false;
+
+	/**
+	 * Whether the importer is saving FrontConsent's settings at this moment,
+	 * so the settings form sanitizer can let them through unchanged.
+	 *
+	 * @return bool
+	 */
+	public static function is_saving() {
+		return self::$saving;
+	}
+
+	/**
 	 * Whether the source plugin's settings exist on this site.
 	 *
 	 * @return bool
@@ -114,7 +131,15 @@ class GDPR_Cookie_Compliance_Migration {
 		$gtm4wp = get_option( 'gtm4wp-options', array() );
 		$result = self::build( $source, $current, is_array( $gtm4wp ) ? $gtm4wp : array() );
 
-		update_option( 'frontconsent_settings', $result['settings'] );
+		// The settings form sanitizer only keeps the tracking integrations it
+		// receives through its own form fields, so it would discard the ones
+		// built here. The values are already sanitized by build().
+		self::$saving = true;
+		try {
+			update_option( 'frontconsent_settings', $result['settings'] );
+		} finally {
+			self::$saving = false;
+		}
 
 		// Leave the import available for a retry when the source data could
 		// not be read, so the admin can repair it and run it again.
@@ -402,7 +427,9 @@ class GDPR_Cookie_Compliance_Migration {
 		$migrated = 0;
 		$existing = 0;
 		foreach ( $candidates as $key => $value ) {
-			if ( array_key_exists( $key, $current ) ) {
+			// A blank saved value (empty text, no policy page) is only the
+			// form default, not a choice, so it is safe to fill.
+			if ( array_key_exists( $key, $current ) && ! in_array( $current[ $key ], array( '', 0, null ), true ) ) {
 				++$existing;
 				continue;
 			}

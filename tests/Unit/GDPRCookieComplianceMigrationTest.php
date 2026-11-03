@@ -454,4 +454,63 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 		$result = Importer::build( array( 'moove_gdpr_consent_expiration' => '99999' ), array() );
 		$this->assertSame( 730, $result['settings']['cookie_notice_expiration_days'] );
 	}
+
+	/**
+	 * With the settings page registered (as on a real admin request), saving
+	 * must go through the option sanitizer without losing the imported data.
+	 */
+	public function test_run_persists_integrations_through_the_settings_sanitizer() {
+		( new \FrontConsent\Admin\Settings() )->register_settings();
+
+		update_option(
+			'frontconsent_settings',
+			array(
+				'enable_cookie_notice'                => true,
+				'cookie_notice_message'               => '',
+				'cookie_notice_accept_label'          => '',
+				'cookie_notice_reject_label'          => '',
+				'cookie_notice_policy_page_id'        => 0,
+				'cookie_notice_tracking_integrations' => array(),
+			)
+		);
+		update_option(
+			Importer::SOURCE_OPTION,
+			$this->source(
+				array(
+					'ga4'    => 2,
+					'ga4_id' => 'G-ABC123',
+					'gtm'    => 2,
+					'gtm_id' => 'GTM-ABCD12',
+				),
+				array(
+					'moove_gdpr_info_bar_content'            => '<p>Hello cookies</p>',
+					'moove_gdpr_infobar_accept_button_label' => 'Accept all',
+				)
+			)
+		);
+
+		Importer::run();
+		$saved = get_option( 'frontconsent_settings' );
+
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'ga4',
+					'id'   => 'G-ABC123',
+				),
+				array(
+					'type' => 'gtm',
+					'id'   => 'GTM-ABCD12',
+				),
+			),
+			$saved['cookie_notice_tracking_integrations']
+		);
+		// Blank defaults are not a configured value, so the texts are imported.
+		$this->assertSame( 'Hello cookies', $saved['cookie_notice_message'] );
+		$this->assertSame( 'Accept all', $saved['cookie_notice_accept_label'] );
+
+		// A second run neither duplicates nor changes anything.
+		Importer::run();
+		$this->assertSame( $saved, get_option( 'frontconsent_settings' ) );
+	}
 }
