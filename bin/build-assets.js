@@ -29,14 +29,16 @@ const CleanCSS = require( 'clean-css' );
 
 /**
  * Plugin-relative paths of every plain asset this script knows how to
- * minify. Keep in sync with the enqueue calls in includes/Frontend/CookieNotice.php
- * and includes/Admin/Settings.php.
+ * minify. Keep in sync with the enqueue calls in includes/Frontend/CookieNotice.php,
+ * includes/Admin/Settings.php and includes/Admin/Scanner.php.
  */
 const ASSETS = [
 	{ relativePath: 'assets/cookie-notice/frontconsent-cookie-notice.js', type: 'js' },
 	{ relativePath: 'assets/cookie-notice/frontconsent-cookie-notice.css', type: 'css' },
 	{ relativePath: 'assets/admin/settings.js', type: 'js' },
 	{ relativePath: 'assets/admin/settings.css', type: 'css' },
+	{ relativePath: 'assets/admin/scanner.js', type: 'js' },
+	{ relativePath: 'assets/admin/scanner.css', type: 'css' },
 ];
 
 /**

@@ -92,10 +92,14 @@ class Plugin_Main {
 			if ( ! class_exists( 'FrontConsent\Admin\Settings' ) ) {
 				require_once FRCN_PLUGIN_PATH . 'includes/Admin/Settings.php';
 			}
+			if ( ! class_exists( 'FrontConsent\Admin\Scanner' ) ) {
+				require_once FRCN_PLUGIN_PATH . 'includes/Admin/Scanner.php';
+			}
 			if ( ! class_exists( 'FrontConsent\GDPR_Cookie_Compliance_Migration' ) ) {
 				require_once FRCN_PLUGIN_PATH . 'includes/GDPR_Cookie_Compliance_Migration.php';
 			}
 			new Admin\Settings();
+			new Admin\Scanner();
 		}
 	}
 }
