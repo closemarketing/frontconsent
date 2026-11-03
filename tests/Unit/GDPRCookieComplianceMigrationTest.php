@@ -31,7 +31,7 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 				array(
 					'ga4'    => 2,
 					'ga4_id' => 'G-ABC123',
-					'gtm'    => 3,
+					'gtm'    => 2,
 					'gtm_id' => 'GTM-ABCD12',
 				)
 			),
@@ -379,5 +379,79 @@ class GDPRCookieComplianceMigrationTest extends TestCase {
 			$this->assertSame( $current, $result['settings'] );
 			$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
 		}
+	}
+
+	public function test_integration_in_a_different_category_is_flagged_for_review() {
+		$result = Importer::build(
+			$this->source(
+				array(
+					'gtm'    => 3,
+					'gtm_id' => 'GTM-ABCD12',
+					'ga4'    => 3,
+					'ga4_id' => 'G-ABC123',
+				)
+			),
+			array()
+		);
+
+		// Imported, but the category FrontConsent derives from the type differs.
+		$this->assertCount( 2, $result['settings']['cookie_notice_tracking_integrations'] );
+		$this->assertSame( array( 'needs_review', 'needs_review' ), $this->statuses( $result['report'] ) );
+		$this->assertStringContainsString( 'marketing', $result['report'][0]['note'] );
+		$this->assertStringContainsString( 'analytics', $result['report'][0]['note'] );
+	}
+
+	public function test_matching_category_is_not_flagged() {
+		$result = Importer::build( $this->source( array( 'ga4' => 2, 'ga4_id' => 'G-ABC123' ) ), array() );
+
+		$this->assertSame( array( 'migrated' ), $this->statuses( $result['report'] ) );
+		$this->assertSame( '', $result['report'][0]['note'] );
+	}
+
+	public function test_non_scalar_tracking_id_is_flagged_without_warnings() {
+		$result = Importer::build( $this->source( array( 'ga4' => 2, 'ga4_id' => array( 'x' ) ) ), array() );
+
+		$this->assertArrayNotHasKey( 'cookie_notice_tracking_integrations', $result['settings'] );
+		$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ) );
+	}
+
+	public function test_already_decoded_gdin_values_is_imported() {
+		$result = Importer::build(
+			array(
+				'gdin_values' => array(
+					'ga4'    => 2,
+					'ga4_id' => 'G-ABC123',
+				),
+			),
+			array()
+		);
+
+		$this->assertSame(
+			array(
+				array(
+					'type' => 'ga4',
+					'id'   => 'G-ABC123',
+				),
+			),
+			$result['settings']['cookie_notice_tracking_integrations']
+		);
+		$this->assertTrue( $result['complete'] );
+	}
+
+	public function test_negative_or_invalid_expiration_is_reported_not_imported() {
+		foreach ( array( '-5', 'abc' ) as $value ) {
+			$result = Importer::build( array( 'moove_gdpr_consent_expiration' => $value ), array() );
+
+			$this->assertArrayNotHasKey( 'cookie_notice_expiration_days', $result['settings'], $value );
+			$this->assertSame( array( 'needs_review' ), $this->statuses( $result['report'] ), $value );
+		}
+	}
+
+	public function test_valid_expiration_is_imported_and_capped() {
+		$result = Importer::build( array( 'moove_gdpr_consent_expiration' => '30' ), array() );
+		$this->assertSame( 30, $result['settings']['cookie_notice_expiration_days'] );
+
+		$result = Importer::build( array( 'moove_gdpr_consent_expiration' => '99999' ), array() );
+		$this->assertSame( 730, $result['settings']['cookie_notice_expiration_days'] );
 	}
 }
