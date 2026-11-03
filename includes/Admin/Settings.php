@@ -961,6 +961,11 @@ class Settings {
 			return get_option( self::OPTION_NAME, array() );
 		}
 
+		// The GDPR Cookie Compliance importer saves values it already sanitized.
+		if ( GDPR_Cookie_Compliance_Migration::is_saving() ) {
+			return $value;
+		}
+
 		$current_options = get_option( self::OPTION_NAME, array() );
 		$sanitized       = $current_options;
 

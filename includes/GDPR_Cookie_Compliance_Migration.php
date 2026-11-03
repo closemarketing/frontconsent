@@ -63,6 +63,17 @@ class GDPR_Cookie_Compliance_Migration {
 	);
 
 	/**
+	 * Cookie categories the source plugin assigns to an integration, mapped
+	 * to FrontConsent's consent categories. Other values (e.g. 1) are ignored.
+	 *
+	 * @var string[]
+	 */
+	const SOURCE_CATEGORIES = array(
+		'2' => 'analytics',
+		'3' => 'marketing',
+	);
+
+	/**
 	 * Source integrations FrontConsent has no equivalent for, with a label.
 	 *
 	 * @return string[]
@@ -75,6 +86,23 @@ class GDPR_Cookie_Compliance_Migration {
 			'clarity'   => __( 'Microsoft Clarity', 'frontconsent' ),
 			'recaptcha' => __( 'Google reCAPTCHA blocker', 'frontconsent' ),
 		);
+	}
+
+	/**
+	 * Whether run() is saving the already sanitized settings right now.
+	 *
+	 * @var bool
+	 */
+	private static $saving = false;
+
+	/**
+	 * Whether the importer is saving FrontConsent's settings at this moment,
+	 * so the settings form sanitizer can let them through unchanged.
+	 *
+	 * @return bool
+	 */
+	public static function is_saving() {
+		return self::$saving;
 	}
 
 	/**
@@ -103,7 +131,15 @@ class GDPR_Cookie_Compliance_Migration {
 		$gtm4wp = get_option( 'gtm4wp-options', array() );
 		$result = self::build( $source, $current, is_array( $gtm4wp ) ? $gtm4wp : array() );
 
-		update_option( 'frontconsent_settings', $result['settings'] );
+		// The settings form sanitizer only keeps the tracking integrations it
+		// receives through its own form fields, so it would discard the ones
+		// built here. The values are already sanitized by build().
+		self::$saving = true;
+		try {
+			update_option( 'frontconsent_settings', $result['settings'] );
+		} finally {
+			self::$saving = false;
+		}
 
 		// Leave the import available for a retry when the source data could
 		// not be read, so the admin can repair it and run it again.
@@ -161,7 +197,10 @@ class GDPR_Cookie_Compliance_Migration {
 	private static function map_integrations( array $source, array &$current, array &$report, array $gtm4wp = array() ) {
 		$values   = array();
 		$readable = true;
-		if ( isset( $source['gdin_values'] ) && is_string( $source['gdin_values'] ) ) {
+		if ( isset( $source['gdin_values'] ) && is_array( $source['gdin_values'] ) ) {
+			// Already decoded (e.g. filtered by another plugin): use it as is.
+			$values = $source['gdin_values'];
+		} elseif ( isset( $source['gdin_values'] ) && is_string( $source['gdin_values'] ) ) {
 			$decoded = json_decode( $source['gdin_values'], true );
 			$values  = is_array( $decoded ) ? $decoded : array();
 
@@ -215,8 +254,9 @@ class GDPR_Cookie_Compliance_Migration {
 				continue;
 			}
 
-			$id   = strtoupper( trim( sanitize_text_field( (string) ( $values[ $slug . '_id' ] ?? '' ) ) ) );
-			$type = self::INTEGRATION_MAP[ $slug ];
+			$raw_id = $values[ $slug . '_id' ] ?? '';
+			$id     = is_scalar( $raw_id ) ? strtoupper( trim( sanitize_text_field( (string) $raw_id ) ) ) : '';
+			$type   = self::INTEGRATION_MAP[ $slug ];
 
 			// The source plugin accepts GA4 measurement IDs in its GTM field.
 			if ( 'gtm' === $type && 0 === strpos( $id, 'G-' ) ) {
@@ -259,15 +299,29 @@ class GDPR_Cookie_Compliance_Migration {
 				'id'   => $id,
 			);
 
-			$note = '';
+			$notes = array();
 			if ( 'gtmc2' === $slug ) {
-				$note = __( 'Imported as Google Tag Manager. Review your Consent Mode v2 setup.', 'frontconsent' );
+				$notes[] = __( 'Imported as Google Tag Manager. Review your Consent Mode v2 setup.', 'frontconsent' );
+			}
+
+			// FrontConsent derives the consent category from the integration
+			// type, so a category chosen in the source plugin cannot be kept
+			// when it differs: flag it instead of changing it silently.
+			$source_category = is_scalar( $value ) ? ( self::SOURCE_CATEGORIES[ (string) $value ] ?? '' ) : '';
+			$default         = Frontend\CookieNotice::get_integration_default_category( $type );
+			if ( '' !== $source_category && $source_category !== $default ) {
+				$notes[] = sprintf(
+					/* translators: 1: consent category in GDPR Cookie Compliance, 2: consent category in FrontConsent. */
+					__( 'It was in the "%1$s" category in GDPR Cookie Compliance, but FrontConsent treats it as "%2$s". Review the consent category if you use per-category consent.', 'frontconsent' ),
+					$source_category,
+					$default
+				);
 			}
 
 			$report[] = array(
 				'item'   => $label . ' (' . $id . ')',
-				'status' => 'gtmc2' === $slug ? self::STATUS_REVIEW : self::STATUS_MIGRATED,
-				'note'   => $note,
+				'status' => $notes ? self::STATUS_REVIEW : self::STATUS_MIGRATED,
+				'note'   => implode( ' ', $notes ),
 			);
 		}
 
@@ -332,9 +386,16 @@ class GDPR_Cookie_Compliance_Migration {
 		}
 
 		if ( isset( $source['moove_gdpr_consent_expiration'] ) ) {
-			$days = absint( $source['moove_gdpr_consent_expiration'] );
-			if ( $days > 0 ) {
-				$candidates['cookie_notice_expiration_days'] = min( $days, 730 );
+			$raw_days = $source['moove_gdpr_consent_expiration'];
+			if ( is_numeric( $raw_days ) && $raw_days > 0 ) {
+				$candidates['cookie_notice_expiration_days'] = min( (int) $raw_days, 730 );
+			} elseif ( is_numeric( $raw_days ) ? $raw_days < 0 : ( is_string( $raw_days ) && '' !== trim( $raw_days ) ) ) {
+				// absint() would turn a negative value into a valid duration.
+				$report[] = array(
+					'item'   => __( 'Consent expiration', 'frontconsent' ),
+					'status' => self::STATUS_REVIEW,
+					'note'   => __( 'The consent expiration of GDPR Cookie Compliance is not a valid number of days, so it was not imported. Set it manually in FrontConsent.', 'frontconsent' ),
+				);
 			}
 		}
 
@@ -366,7 +427,9 @@ class GDPR_Cookie_Compliance_Migration {
 		$migrated = 0;
 		$existing = 0;
 		foreach ( $candidates as $key => $value ) {
-			if ( array_key_exists( $key, $current ) ) {
+			// A blank saved value (empty text, no policy page) is only the
+			// form default, not a choice, so it is safe to fill.
+			if ( array_key_exists( $key, $current ) && ! in_array( $current[ $key ], array( '', 0, null ), true ) ) {
 				++$existing;
 				continue;
 			}
