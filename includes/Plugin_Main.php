@@ -42,7 +42,39 @@ class Plugin_Main {
 	 * Constructor.
 	 */
 	private function __construct() {
+		add_action( 'init', array( $this, 'load_bundled_translations' ), 1 );
 		$this->init();
+	}
+
+	/**
+	 * Load the translations bundled in /languages, on top of the WordPress.org
+	 * language pack.
+	 *
+	 * WordPress only ever loads one file per text domain on its own, and it
+	 * prefers the WordPress.org pack — which lags behind new strings until
+	 * they are translated on translate.wordpress.org. Loading the pack first
+	 * and the bundled file second keeps the community translations where they
+	 * exist and fills in the rest from the bundled file.
+	 *
+	 * @return void
+	 */
+	public function load_bundled_translations() {
+		$locale  = determine_locale();
+		$bundled = FRCN_PLUGIN_PATH . 'languages/frontconsent-' . $locale . '.mo';
+
+		if ( ! file_exists( $bundled ) ) {
+			return;
+		}
+
+		if ( ! is_textdomain_loaded( 'frontconsent' ) ) {
+			$pack = WP_LANG_DIR . '/plugins/frontconsent-' . $locale . '.mo';
+
+			if ( file_exists( $pack ) ) {
+				load_textdomain( 'frontconsent', $pack, $locale );
+			}
+		}
+
+		load_textdomain( 'frontconsent', $bundled, $locale );
 	}
 
 	/**
