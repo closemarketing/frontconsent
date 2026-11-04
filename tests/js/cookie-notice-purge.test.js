@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const scriptPath = path.resolve(__dirname, '../../assets/cookie-notice/frontconsent-cookie-notice.js');
 const cookieNoticeScript = fs.readFileSync(scriptPath, 'utf8');
 
-const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', '_fbp', 'sbjs_*'];
+const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', '_fbp', 'oaiq_*', 'sbjs_*'];
 const ANALYTICS_COOKIES = ['_ga', '_ga_*', '_gid'];
 const CATEGORIES_COOKIE = 'frontconsent_categories';
 
@@ -45,7 +45,19 @@ function createCookieJar(initial) {
 	};
 }
 
-function createEnvironment(initialCookies) {
+function createStorage(initial) {
+	const items = new Map(Object.entries(initial || {}));
+
+	return {
+		get length() { return items.size; },
+		key(index) { return Array.from(items.keys())[index] || null; },
+		removeItem(key) { items.delete(key); },
+		keys() { return Array.from(items.keys()); }
+	};
+}
+
+function createEnvironment(initialCookies, initialSessionStorage) {
+	const sessionStorage = createStorage(initialSessionStorage);
 	const cookies = createCookieJar(initialCookies);
 	const listeners = {};
 	const actionListeners = {};
@@ -118,6 +130,7 @@ function createEnvironment(initialCookies) {
 	};
 	const window = {
 		location: { protocol: 'https:', hostname: 'www.example.com', reload() {} },
+		sessionStorage,
 		setTimeout(callback) { callback(); }
 	};
 
@@ -145,7 +158,7 @@ function createEnvironment(initialCookies) {
 	});
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), panelListeners, reopenListeners, toggles };
+	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), panelListeners, reopenListeners, sessionStorage, toggles };
 }
 
 test('rejecting deletes tracking cookies set on the host and on parent domains', () => {
@@ -216,4 +229,12 @@ test('a returning Analytics-only visitor keeps _ga on page load', () => {
 
 	assert.ok(environment.cookieNames().includes('_ga'));
 	assert.ok(!environment.cookieNames().includes('_fbp'));
+});
+
+test('rejecting also clears tracking entries kept in web storage', () => {
+	const environment = createEnvironment([], { 'oaiq_cs:PIXEL123': '1', 'unrelated': 'keep' });
+
+	environment.actionListeners.reject({ preventDefault() {} });
+
+	assert.deepEqual(environment.sessionStorage.keys(), ['unrelated']);
 });

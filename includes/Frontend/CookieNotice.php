@@ -156,6 +156,9 @@ class CookieNotice {
 			'_clsk',
 			// Brevo.
 			'sib_cuid',
+			// OpenAI ChatGPT Ads pixel (cookie, plus its sessionStorage entry).
+			'__obref',
+			'oaiq_*',
 			// WooCommerce order attribution (sourcebuster).
 			'sbjs_*',
 		);

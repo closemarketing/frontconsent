@@ -141,7 +141,13 @@
 			return isAnalytics ? !allowed.analytics : !allowed.marketing;
 		});
 
-		if (!patterns.length || !document.cookie) {
+		if (!patterns.length) {
+			return;
+		}
+
+		purgeTrackingStorage(patterns);
+
+		if (!document.cookie) {
 			return;
 		}
 
@@ -163,6 +169,41 @@
 			domains.forEach(function (domain) {
 				document.cookie = name + '=; path=/; max-age=0' + domain;
 			});
+		});
+	}
+
+	/**
+	 * Same purge for localStorage/sessionStorage: some tags keep their
+	 * identifiers there instead of (or as well as) in cookies — e.g. the
+	 * OpenAI ChatGPT Ads pixel's `oaiq_cs:<pixel id>` session entry.
+	 * Storage access can throw (blocked site data, private windows), so each
+	 * store is handled on its own and failures are ignored.
+	 *
+	 * @param {string[]} patterns Purge patterns already filtered by category.
+	 */
+	function purgeTrackingStorage(patterns) {
+		['localStorage', 'sessionStorage'].forEach(function (storeName) {
+			try {
+				var store = window[storeName];
+
+				if (!store) {
+					return;
+				}
+
+				var keys = [];
+
+				for (var i = 0; i < store.length; i++) {
+					keys.push(store.key(i));
+				}
+
+				keys.forEach(function (key) {
+					if (key && matchesPurgePattern(key, patterns)) {
+						store.removeItem(key);
+					}
+				});
+			} catch (e) {
+				// Storage unavailable: nothing to purge.
+			}
 		});
 	}
 
