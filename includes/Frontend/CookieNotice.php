@@ -183,7 +183,7 @@ class CookieNotice {
 		 *
 		 * @param string[] $patterns Cookie names; a trailing '*' matches a prefix.
 		 */
-		$patterns = apply_filters( 'frcn_cookie_notice_analytics_cookies', array( '_ga', '_ga_*', '_gid', '_gat*', '_clck', '_clsk' ) );
+		$patterns = apply_filters( 'frcn_cookie_notice_analytics_cookies', array( '_ga', '_ga_*', '_gid', '_gat*', '_clck', '_clsk', 'sbjs_*' ) );
 
 		return is_array( $patterns ) ? array_values( array_filter( array_map( 'strval', $patterns ) ) ) : array();
 	}
