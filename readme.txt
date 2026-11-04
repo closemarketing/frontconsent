@@ -4,7 +4,7 @@ Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
 Stable tag: 1.0.2
-Version: 1.0.2
+Version: 1.0.3-beta.videos
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
