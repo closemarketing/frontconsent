@@ -1,0 +1,108 @@
+/* FrontConsent Scanner: settings tab and dashboard widget. */
+
+.frcn-scanner__summary {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	margin: 16px 0;
+}
+
+.frcn-scanner--widget .frcn-scanner__summary {
+	margin: 0 0 8px;
+}
+
+.frcn-scanner__grade {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-width: 72px;
+	height: 72px;
+	border-radius: 8px;
+	color: #fff;
+	background: #646970;
+}
+
+.frcn-scanner__grade--a { background: #00a32a; }
+.frcn-scanner__grade--b { background: #4f8a10; }
+.frcn-scanner__grade--c { background: #996800; }
+.frcn-scanner__grade--d { background: #c9480a; }
+.frcn-scanner__grade--e,
+.frcn-scanner__grade--f { background: #d63638; }
+
+.frcn-scanner__grade-letter {
+	font-size: 32px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.frcn-scanner__score {
+	font-size: 12px;
+}
+
+.frcn-scanner__headline {
+	margin: 0 0 4px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.frcn-scanner__counts,
+.frcn-scanner__date {
+	margin: 0 0 4px;
+	color: #50575e;
+}
+
+.frcn-scanner__count {
+	margin-right: 12px;
+	white-space: nowrap;
+}
+
+.frcn-scanner__checks {
+	max-width: 760px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.frcn-scanner__check {
+	display: flex;
+	gap: 10px;
+	padding: 10px 0;
+	border-top: 1px solid #dcdcde;
+}
+
+.frcn-scanner__check p {
+	margin: 4px 0 0;
+}
+
+.frcn-scanner__check-status {
+	color: #50575e;
+}
+
+/* Status is never conveyed by colour alone: icon + text label. */
+.frcn-scanner__icon::before {
+	display: inline-block;
+	width: 1.4em;
+	font-weight: 700;
+	text-align: center;
+}
+
+.frcn-scanner__status--pass .frcn-scanner__icon::before { content: "\2713"; color: #00a32a; }
+.frcn-scanner__status--warn .frcn-scanner__icon::before { content: "!"; color: #996800; }
+.frcn-scanner__status--fail .frcn-scanner__icon::before { content: "\2715"; color: #d63638; }
+.frcn-scanner__status--not_applicable .frcn-scanner__icon::before,
+.frcn-scanner__status--in_report .frcn-scanner__icon::before { content: "\2013"; color: #646970; }
+
+.frcn-scanner__pending .spinner {
+	float: none;
+	margin: 0 8px 0 0;
+}
+
+.frcn-scanner__message--error,
+.frcn-scanner__error {
+	color: #d63638;
+}
+
+.frcn-scanner__widget-link {
+	margin-bottom: 0;
+}

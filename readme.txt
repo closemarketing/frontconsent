@@ -64,7 +64,11 @@ FrontConsent already sends a denied default first. To avoid a second, conflictin
 
 == External services ==
 
-This plugin only connects to external services that the site owner explicitly configures — none are contacted by default. All connections below happen entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category; no data is ever sent from the server.
+This plugin only connects to external services that the site owner explicitly configures or requests — none are contacted by default. The tracking services below are loaded entirely in the visitor's own browser, after that visitor has accepted the relevant cookie category. The only request made from the server is the compliance scan, and only when an administrator clicks "Scan my site".
+
+**tuwebcumple.es (compliance scanner)**
+When an administrator clicks "Scan my site" in the Scanner tab, the site's public home URL is sent from the server to the tuwebcumple.es API (`https://tuwebcumple.es/api/v1/scans`), which visits the site like a first-time visitor and returns the result; the plugin then asks the same API for the result until the scan finishes. No visitor or personal data is sent. The last result is stored in the site's database and shown in the Scanner tab and a dashboard widget.
+Service provided by CLOSE Marketing: [Terms and privacy](https://tuwebcumple.es/).
 
 **Google Tag Manager / Google Analytics 4 (GA4)**
 If a site administrator enters a Google Tag Manager container ID or a GA4 Measurement ID in the plugin settings, the visitor's browser loads the corresponding Google script (`https://www.googletagmanager.com/gtm.js` or `https://www.googletagmanager.com/gtag/js`) once the visitor accepts. This sends standard Google Tag Manager/Analytics data (e.g. page views, and any events the site's own tag configuration adds) to Google.
@@ -83,6 +87,9 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= Unreleased =
+* Added a Scanner tab that checks the site's cookie compliance through tuwebcumple.es and lists the result per requirement, plus a dashboard widget with the last grade.
 
 = 1.0.2 =
 * Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.
