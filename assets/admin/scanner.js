@@ -53,8 +53,9 @@
 			if (button) {
 				button.disabled = !!data.pending;
 			}
+			// The rendered result shows its own "Analyzing…" line while pending.
+			setMessage('');
 			if (!data.pending) {
-				setMessage('');
 				return;
 			}
 			if (polls >= config.maxPolls) {
