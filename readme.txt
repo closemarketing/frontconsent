@@ -4,7 +4,7 @@ Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
 Stable tag: 1.0.2
-Version: 1.0.2
+Version: 1.0.3-beta.withdraw
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,9 @@ Paste a Google Tag Manager or GA4 ID (or install snippet), or a Clientify, Brevo
 
 **Acceptance stats:**
 The settings page shows a simple accepted/rejected acceptance-rate stat (site administrators are excluded from the count).
+
+**Script & Iframe Blocking:**
+Configure a list of match patterns (e.g. `youtube.com/embed`, `google.com/maps`, a custom tracking domain) mapped to a consent category, and FrontConsent holds back any matching `<script src="...">` or `<iframe src="...">` on the page — YouTube embeds, Maps, social widgets, or a custom tracking snippet added by your theme or another plugin — until the visitor accepts. This works for any third-party embed, not just Consent-Mode-aware tags.
 
 **Advanced Cookie Management (FrontConsent PRO):**
 Extend Cookie Notice with separate Necessary, Analytics and Marketing preferences, a customizable preferences dialog and a reusable trigger that lets visitors update their choices later. Google Ads, Meta Pixel and Microsoft Clarity only run after the relevant category is accepted. It also supports the official Meta Pixel for WordPress plugin by holding its Pixel and Conversions API signals until Marketing consent.
@@ -83,6 +86,15 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= Unreleased =
+* Added generic Script & Iframe Blocking: a settings-configured list of match-pattern/category rules holds back any matching `<script src="...">` or `<iframe src="...">` on the page (YouTube, Maps, social widgets, custom tracking snippets, etc.) until the visitor accepts, complementing the existing Google Consent Mode v2 support.
+* Added a "Customize cookie settings" button (left of Reject/Accept, showing the cookie icon) that opens a cookie preferences dialog with Accept all / Reject all / Save changes actions and a static "Strictly necessary" section, also reachable from the persistent "Cookie preferences" reopen trigger. Every action records the exact same consent cookie, Consent Mode update and logging as the existing Accept/Reject buttons.
+* Added PRO-ready extension points so a future FrontConsent PRO add-on can render per-category consent (Analytics, Marketing, etc.) into the same panel without forking markup: the `frcn_cookie_preferences_categories` action, the `frcn_cookie_consent_categories` filter, and the `frcn_cookie_customize_button_label`/`frcn_cookie_customize_button_enabled` filters. Documented in `docs/preferences-panel-hooks.md`.
+* The preferences panel now has real Analytics and Marketing toggles. Each category independently gates its tracking integrations, its Google Consent Mode signals (`analytics_storage` / `ad_*`), the script/iframe blocker and the cookies deleted on rejection; lowering an earlier choice reloads the page so tags already running stop. The `frcn_cookie_notice_analytics_cookies` filter sets which purge patterns count as Analytics.
+* YouTube embeds now load from `youtube-nocookie.com` and Vimeo embeds get `dnt=1`, so videos set no cookies before consent. Turn it off with the `frcn_privacy_enhanced_embeds` filter.
+* Withdrawing or rejecting consent now also deletes the OpenAI ChatGPT Ads pixel's `__obref` cookie and clears matching tracking entries from localStorage/sessionStorage (e.g. `oaiq_cs:*`), using the same `frcn_cookie_notice_purge_cookies` list.
+* FrontBlocks PRO's legacy cookie categories module is switched off once on update: it only hooked FrontBlocks' retired banner, so under FrontConsent it printed a categories dialog nobody could open.
 
 = 1.0.2 =
 * Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.

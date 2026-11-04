@@ -166,4 +166,35 @@ class MigrationTest extends TestCase {
 		delete_option( \FrontConsent\Frontend\CookieNotice::STATS_OPTION_ACCEPTED );
 		delete_option( 'frontblocks_cookie_notice_accepted_count' );
 	}
+
+	/**
+	 * FrontBlocks PRO's legacy categories module (which can no longer show
+	 * its Customize button under FrontConsent) is switched off exactly once,
+	 * even on a site whose FrontBlocks migration already ran.
+	 */
+	public function test_frontblocks_pro_categories_module_is_disabled_once() {
+		update_option( Migration::DONE_FLAG, true );
+		delete_option( Migration::PRO_CATEGORIES_DONE_FLAG );
+		update_option(
+			'frontblocks_pro_cookie_settings',
+			array(
+				'enable'          => true,
+				'customize_label' => 'Configurar',
+			)
+		);
+
+		Migration::maybe_disable_frontblocks_pro_categories();
+
+		$settings = get_option( 'frontblocks_pro_cookie_settings' );
+		$this->assertFalse( $settings['enable'] );
+		$this->assertSame( 'Configurar', $settings['customize_label'] );
+
+		// A site admin who deliberately turns it back on afterwards is respected.
+		update_option( 'frontblocks_pro_cookie_settings', array( 'enable' => true ) );
+		Migration::maybe_disable_frontblocks_pro_categories();
+		$this->assertTrue( get_option( 'frontblocks_pro_cookie_settings' )['enable'] );
+
+		delete_option( Migration::PRO_CATEGORIES_DONE_FLAG );
+		delete_option( 'frontblocks_pro_cookie_settings' );
+	}
 }

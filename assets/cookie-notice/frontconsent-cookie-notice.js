@@ -44,6 +44,67 @@
 	}
 
 	/**
+	 * The visitor's current per-category consent: the frontconsent_categories
+	 * cookie when the visitor made an explicit choice, falling back to the
+	 * binary accepted/rejected cookie (all allowed / none allowed) for a
+	 * visitor who decided before categories existed. Mirrors
+	 * CookieNotice::get_allowed_categories_default() server-side.
+	 *
+	 * @returns {{analytics: boolean, marketing: boolean}}
+	 */
+	function getAllowedCategories() {
+		var accepted = readCookie(frcnCookieNotice.cookieName) === 'accepted';
+		var allowed = { analytics: accepted, marketing: accepted };
+		var raw = frcnCookieNotice.categoriesCookieName ? readCookie(frcnCookieNotice.categoriesCookieName) : '';
+
+		if (!raw) {
+			return allowed;
+		}
+
+		try {
+			var parsed = JSON.parse(raw);
+
+			if (parsed && typeof parsed === 'object') {
+				Object.keys(parsed).forEach(function (key) {
+					allowed[key] = !!parsed[key];
+				});
+			}
+		} catch (e) {
+			// Malformed/tampered cookie value: keep the binary fallback.
+		}
+
+		return allowed;
+	}
+
+	/**
+	 * Google Consent Mode state for a per-category map: Analytics drives
+	 * analytics_storage, Marketing drives the three ad_* signals.
+	 *
+	 * @param {{analytics: boolean, marketing: boolean}} categories
+	 * @returns {Object}
+	 */
+	function getConsentModeState(categories) {
+		var analytics = categories.analytics ? 'granted' : 'denied';
+		var marketing = categories.marketing ? 'granted' : 'denied';
+
+		return {
+			ad_storage: marketing,
+			ad_user_data: marketing,
+			ad_personalization: marketing,
+			analytics_storage: analytics
+		};
+	}
+
+	// Lets frontconsent-script-blocker.js (and any add-on) ask about a single
+	// category instead of only the binary accepted/rejected decision. An
+	// add-on that already defined its own wins.
+	if (typeof frcnCookieNotice !== 'undefined' && typeof window.frcnCookieNoticeIsCategoryAllowed !== 'function') {
+		window.frcnCookieNoticeIsCategoryAllowed = function (category) {
+			return !!getAllowedCategories()[category];
+		};
+	}
+
+	/**
 	 * Whether a cookie name matches one of the purge patterns: an exact name
 	 * ('_gid') or a prefix ending in '*' ('_ga_*').
 	 */
@@ -65,11 +126,28 @@
 	 * visitor's device. Each cookie is expired with no domain and with every
 	 * parent domain of the current host, since tags such as GA set theirs
 	 * on the registrable domain ('.example.com') rather than the exact host.
+	 *
+	 * Category-aware: cookies matching frcnCookieNotice.analyticsCookies are
+	 * kept while Analytics is allowed, and every other pattern is kept while
+	 * Marketing is allowed — so a visitor who accepted only Analytics keeps
+	 * `_ga` but loses `_fbp`.
 	 */
 	function purgeTrackingCookies() {
-		var patterns = Array.isArray(frcnCookieNotice.purgeCookies) ? frcnCookieNotice.purgeCookies : [];
+		var allowed = getAllowedCategories();
+		var analyticsPatterns = Array.isArray(frcnCookieNotice.analyticsCookies) ? frcnCookieNotice.analyticsCookies : [];
+		var patterns = (Array.isArray(frcnCookieNotice.purgeCookies) ? frcnCookieNotice.purgeCookies : []).filter(function (pattern) {
+			var isAnalytics = analyticsPatterns.indexOf(pattern) !== -1;
 
-		if (!patterns.length || !document.cookie) {
+			return isAnalytics ? !allowed.analytics : !allowed.marketing;
+		});
+
+		if (!patterns.length) {
+			return;
+		}
+
+		purgeTrackingStorage(patterns);
+
+		if (!document.cookie) {
 			return;
 		}
 
@@ -91,6 +169,41 @@
 			domains.forEach(function (domain) {
 				document.cookie = name + '=; path=/; max-age=0' + domain;
 			});
+		});
+	}
+
+	/**
+	 * Same purge for localStorage/sessionStorage: some tags keep their
+	 * identifiers there instead of (or as well as) in cookies — e.g. the
+	 * OpenAI ChatGPT Ads pixel's `oaiq_cs:<pixel id>` session entry.
+	 * Storage access can throw (blocked site data, private windows), so each
+	 * store is handled on its own and failures are ignored.
+	 *
+	 * @param {string[]} patterns Purge patterns already filtered by category.
+	 */
+	function purgeTrackingStorage(patterns) {
+		['localStorage', 'sessionStorage'].forEach(function (storeName) {
+			try {
+				var store = window[storeName];
+
+				if (!store) {
+					return;
+				}
+
+				var keys = [];
+
+				for (var i = 0; i < store.length; i++) {
+					keys.push(store.key(i));
+				}
+
+				keys.forEach(function (key) {
+					if (key && matchesPurgePattern(key, patterns)) {
+						store.removeItem(key);
+					}
+				});
+			} catch (e) {
+				// Storage unavailable: nothing to purge.
+			}
 		});
 	}
 
@@ -274,13 +387,7 @@
 			window.dataLayer.push(arguments);
 		};
 
-		var granted = readCookie(frcnCookieNotice.cookieName) === 'accepted' ? 'granted' : 'denied';
-		var state = {
-			ad_storage: granted,
-			ad_user_data: granted,
-			ad_personalization: granted,
-			analytics_storage: granted
-		};
+		var state = getConsentModeState(getAllowedCategories());
 
 		// An add-on tracking per-category consent (analytics vs. marketing)
 		// can define this — reading its own cookie the same way — to send the
@@ -329,37 +436,17 @@
 		window.frcnCookieNoticeBootstrapped = true;
 	}
 
-	function hideBannerIfDecided(banner) {
-		var consent = readCookie(frcnCookieNotice.cookieName);
-
-		// An add-on tracking per-category consent (analytics vs. marketing) can
-		// define this to say "the categories cookie is stale — e.g. the site
-		// admin just added a new integration — so re-prompt even though the
-		// legacy accepted/rejected cookie here still looks decided."
-		if (typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale()) {
-			return false;
-		}
-
-		if (banner && (consent === 'accepted' || consent === 'rejected')) {
-			banner.style.display = 'none';
-			return true;
-		}
-
-		return false;
-	}
-
 	/**
 	 * Reveal the persistent "Cookie preferences" trigger once a decision
-	 * cookie exists, and wire it to let the visitor withdraw an acceptance or
-	 * replace a rejection at any time — the only way to do so short of
-	 * deleting the cookie by hand. Reloading the page after clearing the
-	 * cookie is deliberately simple: it lets the server render a fresh,
-	 * undecided banner exactly the way a first-time visitor gets one,
-	 * instead of duplicating that logic client-side.
+	 * cookie exists, and wire it to open the same preferences panel the
+	 * "Customize cookie settings" button opens — the only way to reach it
+	 * again once the original banner is gone. Bound once per page load
+	 * (reopenTriggerWired), same as before; only reveal is repeated when this
+	 * is called again right after an in-page decision.
 	 */
 	var reopenTriggerWired = false;
 
-	function setUpReopenTrigger() {
+	function setUpReopenTrigger(openPreferences) {
 		var reopenBtn = document.getElementById('frcn-cookie-reopen');
 
 		if (!reopenBtn) {
@@ -383,15 +470,8 @@
 
 		reopenTriggerWired = true;
 		reopenBtn.addEventListener('click', function () {
-			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
-			// Withdrawing consent must not leave behind what was set while it
-			// was granted: the page reloads undecided, so nothing is allowed.
-			purgeTrackingCookies();
-
-			if (frcnCookieNotice.isPolicyPage && frcnCookieNotice.homeUrl) {
-				window.location.href = frcnCookieNotice.homeUrl;
-			} else {
-				window.location.reload();
+			if (typeof openPreferences === 'function') {
+				openPreferences(reopenBtn);
 			}
 		});
 	}
@@ -411,31 +491,6 @@
 			rejected: 'Cookies rejected.'
 		};
 
-		requestTrackingIfNeeded();
-		setUpReopenTrigger();
-
-		// A rejected visitor may still carry cookies from before the decision
-		// (an earlier acceptance, or a tag that ran before FrontConsent was
-		// installed): clear them on every page view.
-		if (readCookie(frcnCookieNotice.cookieName) === 'rejected') {
-			purgeTrackingCookies();
-		}
-
-		var banner = document.getElementById('frcn-cookie-notice');
-
-		if (!banner) {
-			return;
-		}
-
-		if (hideBannerIfDecided(banner)) {
-			// Already decided: nothing left to wire up.
-			return;
-		}
-
-		var acceptBtn = banner.querySelector('[data-frcn-cookie-action="accept"]');
-		var rejectBtn = banner.querySelector('[data-frcn-cookie-action="reject"]');
-		var isPopup = banner.classList.contains('frcn-cookie-notice--popup');
-		var previouslyFocused = document.activeElement;
 		var announcer = document.getElementById('frcn-cookie-notice-announcer');
 
 		/**
@@ -451,45 +506,242 @@
 			}
 		}
 
-		revealBanner();
+		// Hoisted out of any "if (banner) { ... }" gate: the preferences panel
+		// (and the reopen trigger that opens it) must keep working even when
+		// the main banner markup isn't rendered at all — e.g. on the
+		// configured cookie policy page — so the decision-recording flow
+		// below can't depend on the banner existing.
+		var decided = false;
 
-		if (acceptBtn) {
-			// preventDefault() is what stops the button's form="..." submit
-			// attribute (the no-JS fallback — see render_banner_markup() and
-			// log_consent_form_callback()) from actually navigating the page
-			// away when JavaScript can run: this handles the decision instead,
-			// entirely client-side.
-			acceptBtn.addEventListener('click', function (event) {
-				event.preventDefault();
-				handleDecision('accepted');
-			});
+		function setConsentCookie(decision) {
+			var maxAge = parseInt(frcnCookieNotice.expirationDays, 10) * 24 * 60 * 60;
+			var secure = window.location.protocol === 'https:' ? '; Secure' : '';
+
+			document.cookie = frcnCookieNotice.cookieName + '=' + decision +
+				'; path=' + frcnCookieNotice.cookiePath + '; max-age=' + maxAge + '; SameSite=Lax' + secure;
 		}
 
-		if (rejectBtn) {
-			rejectBtn.addEventListener('click', function (event) {
+		/**
+		 * Persist the visitor's actual per-category selection (e.g.
+		 * {"analytics":true,"marketing":false}) into its own cookie, right
+		 * alongside the binary consent cookie above — same path/max-age/
+		 * SameSite conventions, just a separate cookie name (see
+		 * CookieNotice::get_categories_cookie_name()). This is what lets
+		 * get_config_callback() build a real allowedCategories map server-side
+		 * on the next request, purely from the normal cookie header, with no
+		 * new AJAX plumbing needed.
+		 *
+		 * @param {Object} categories Category slug => bool map (see collectPreferencesCategories()).
+		 */
+		function setCategoriesCookie(categories) {
+			var maxAge = parseInt(frcnCookieNotice.expirationDays, 10) * 24 * 60 * 60;
+			var secure = window.location.protocol === 'https:' ? '; Secure' : '';
+
+			document.cookie = frcnCookieNotice.categoriesCookieName + '=' + encodeURIComponent(JSON.stringify(categories)) +
+				'; path=' + frcnCookieNotice.cookiePath + '; max-age=' + maxAge + '; SameSite=Lax' + secure;
+		}
+
+		function updateConsentMode(categories) {
+			window.dataLayer = window.dataLayer || [];
+			window.gtag = window.gtag || function () {
+				window.dataLayer.push(arguments);
+			};
+			window.gtag('consent', 'update', getConsentModeState(categories));
+		}
+
+		function dispatchConsentEvent(decision) {
+			var event;
+
+			try {
+				event = new CustomEvent('frcnCookieConsent', { detail: { consent: decision } });
+			} catch (e) {
+				event = document.createEvent('CustomEvent');
+				event.initCustomEvent('frcnCookieConsent', true, true, { consent: decision });
+			}
+
+			document.dispatchEvent(event);
+		}
+
+		/**
+		 * Records a decision through the exact same AJAX endpoint regardless
+		 * of which control triggered it (Accept/Reject in the banner, or
+		 * Accept all/Reject all/Save changes in the preferences panel) — the
+		 * optional `categories` map is only ever additive: log_consent_callback()
+		 * runs it through the frcn_cookie_consent_categories filter and never
+		 * requires it for the binary accepted/rejected cookie to keep working.
+		 */
+		function logDecision(decision, categories) {
+			var nonceForm = new FormData();
+			nonceForm.append('action', 'frcn_get_cookie_notice_log_nonce');
+
+			fetch(frcnCookieNotice.ajaxUrl, {
+				method: 'POST',
+				credentials: 'same-origin',
+				body: nonceForm
+			})
+				.then(function (response) {
+					return response.json();
+				})
+				.then(function (response) {
+					if (!response || !response.success || !response.data) {
+						return;
+					}
+
+					var formData = new FormData();
+					formData.append('action', 'frcn_log_cookie_consent');
+					formData.append('nonce', response.data.nonce);
+					formData.append('decision', decision);
+
+					if (categories) {
+						formData.append('categories', JSON.stringify(categories));
+					}
+
+					return fetch(frcnCookieNotice.ajaxUrl, {
+						method: 'POST',
+						credentials: 'same-origin',
+						body: formData
+					});
+				})
+				.catch(function () {
+					// Best-effort: the aggregate stat is not critical to the consent flow.
+				});
+		}
+
+		/**
+		 * The single decision-recording code path: sets the consent cookie,
+		 * updates Google Consent Mode, announces the outcome, hides the
+		 * banner and preferences panel (whichever are open), reveals the
+		 * reopen trigger, and logs the decision — used identically by the
+		 * banner's own Accept/Reject buttons and by the preferences panel's
+		 * Accept all/Reject all/Save changes actions, per the "no parallel
+		 * consent logic" requirement.
+		 *
+		 * @param {string} decision   'accepted' or 'rejected'.
+		 * @param {Object} categories Optional per-category map (PRO extension point).
+		 */
+		function handleDecision(decision, categories) {
+			if (decided) {
+				return;
+			}
+
+			decided = true;
+
+			// The banner's own plain Accept/Reject buttons call this with no
+			// `categories` argument at all — they still must record an
+			// explicit, real per-category state (both allowed on Accept, both
+			// denied on Reject) rather than leaving the categories cookie
+			// stale or absent, since get_config_callback() treats "cookie
+			// present" as "the visitor made an explicit per-category choice".
+			var categoriesToStore = categories || {
+				necessary: true,
+				analytics: decision === 'accepted',
+				marketing: decision === 'accepted'
+			};
+
+			// Captured before the new cookies overwrite it: a category that was
+			// allowed and is now denied means consent was (partly) withdrawn.
+			var previous = getAllowedCategories();
+			var withdrawn = Object.keys(previous).some(function (key) {
+				return previous[key] && !categoriesToStore[key];
+			});
+
+			setConsentCookie(decision);
+			setCategoriesCookie(categoriesToStore);
+			updateConsentMode(categoriesToStore);
+			announce(decision === 'accepted' ? i18n.accepted : i18n.rejected);
+			hideBannerIfPresent();
+			closePreferencesPanel();
+			setUpReopenTrigger(openPreferencesPanel);
+			dispatchConsentEvent(decision);
+			logDecision(decision, categories);
+
+			// A denied category must not leave behind cookies set while it was
+			// granted (or by a tag that ran earlier). Reads the cookies just
+			// written above, so only what is now denied gets deleted.
+			purgeTrackingCookies();
+
+			// Tags already running on this page can't be unloaded, so a
+			// withdrawal reloads it: the next page view only starts what is
+			// still allowed. Leaves the policy page for home, where the banner
+			// (and its controls) is guaranteed to render.
+			if (withdrawn) {
+				window.setTimeout(function () {
+					if (frcnCookieNotice.isPolicyPage && frcnCookieNotice.homeUrl) {
+						window.location.href = frcnCookieNotice.homeUrl;
+					} else {
+						window.location.reload();
+					}
+				}, 300);
+				return;
+			}
+
+			if (decision === 'accepted') {
+				fetchAndInjectScripts();
+			}
+		}
+
+		// A visitor who denied any category may still carry cookies from before
+		// that decision (an earlier acceptance, or a tag that ran before
+		// FrontConsent was installed): clear them on every page view.
+		var currentConsent = readCookie(frcnCookieNotice.cookieName);
+
+		if (currentConsent === 'accepted' || currentConsent === 'rejected') {
+			purgeTrackingCookies();
+		}
+
+		var banner = document.getElementById('frcn-cookie-notice');
+		var isPopup = !!banner && banner.classList.contains('frcn-cookie-notice--popup');
+		var bannerPreviouslyFocused = document.activeElement;
+		var bannerModalKeydownBound = false;
+
+		function getFocusableElements(container) {
+			return Array.prototype.slice.call(
+				container.querySelectorAll('a[href], button, input, [tabindex]:not([tabindex="-1"])')
+			);
+		}
+
+		function trapFocus(event) {
+			var focusable = getFocusableElements(banner);
+
+			if (!focusable.length) {
+				return;
+			}
+
+			var first = focusable[0];
+			var last = focusable[focusable.length - 1];
+
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && document.activeElement === last) {
+				event.preventDefault();
+				first.focus();
+			}
+		}
+
+		/**
+		 * Keydown handler bound only while the popup (true modal) layout is
+		 * open: Tab/Shift+Tab loop within the dialog's own focusable elements
+		 * (trapFocus()) and Escape is treated as an explicit reject — a valid,
+		 * equivalent consent decision, not a silent dismissal — so a keyboard
+		 * user always has a way out that doesn't just abandon the dialog
+		 * without a decision being recorded (see handleDecision()).
+		 *
+		 * Deliberately a no-op while the preferences panel is open on top of
+		 * it — that dialog owns Tab/Escape while it's the visible one; see
+		 * isPreferencesPanelOpen().
+		 */
+		function handleModalKeydown(event) {
+			if (isPreferencesPanelOpen()) {
+				return;
+			}
+
+			if (event.key === 'Tab') {
+				trapFocus(event);
+			} else if (event.key === 'Escape' || event.key === 'Esc') {
 				event.preventDefault();
 				handleDecision('rejected');
-			});
-		}
-
-		var customizeBtn = banner.querySelector('[data-frcn-cookie-action="customize"]');
-
-		if (customizeBtn) {
-			// Deliberately not routed through handleDecision(): clicking it isn't a
-			// decision by itself, just a request to see more detail. An add-on
-			// listens for this to open its own categories dialog.
-			customizeBtn.addEventListener('click', function () {
-				var event;
-
-				try {
-					event = new CustomEvent('frcnCookieNoticeCustomize');
-				} catch (e) {
-					event = document.createEvent('CustomEvent');
-					event.initCustomEvent('frcnCookieNoticeCustomize', true, true, null);
-				}
-
-				document.dispatchEvent(event);
-			});
+			}
 		}
 
 		/**
@@ -516,28 +768,66 @@
 				if (isPopup) {
 					document.body.classList.add('frcn-cookie-notice-lock-scroll');
 
+					var acceptBtnForFocus = banner.querySelector('[data-frcn-cookie-action="accept"]');
+
 					// A true modal (the popup layout blocks the rest of the
 					// page) must move focus into itself on open — the first
 					// focusable control is the reject button in DOM order,
 					// but the accept button is used here to keep the
 					// pre-existing default behavior/tests unchanged.
-					if (acceptBtn) {
-						acceptBtn.focus({ preventScroll: true });
+					if (acceptBtnForFocus) {
+						acceptBtnForFocus.focus({ preventScroll: true });
 					}
 
 					document.addEventListener('keydown', handleModalKeydown);
+					bannerModalKeydownBound = true;
 				}
 			}, delay);
 		}
 
-		function getFocusableElements() {
-			return Array.prototype.slice.call(
-				banner.querySelectorAll('a[href], button, input, [tabindex]:not([tabindex="-1"])')
-			);
+		function hideBannerIfPresent() {
+			if (!banner) {
+				return;
+			}
+
+			banner.classList.add('frcn-cookie-notice--hidden');
+			document.body.classList.remove('frcn-cookie-notice-lock-scroll');
+
+			if (bannerModalKeydownBound) {
+				document.removeEventListener('keydown', handleModalKeydown);
+				bannerModalKeydownBound = false;
+			}
+
+			if (isPopup && bannerPreviouslyFocused && typeof bannerPreviouslyFocused.focus === 'function') {
+				bannerPreviouslyFocused.focus({ preventScroll: true });
+			}
+
+			window.setTimeout(function () {
+				if (banner.parentNode) {
+					banner.parentNode.removeChild(banner);
+				}
+			}, 300);
 		}
 
-		function trapFocus(event) {
-			var focusable = getFocusableElements();
+		// --- Preferences panel: dialog opened from the "Customize cookie
+		// settings" button (in the banner) or the persistent reopen trigger.
+		// Always looked up (even when the main banner didn't render, e.g. on
+		// the policy page) since CookieNotice::render_preferences_panel()
+		// prints it unconditionally, independently of the banner markup.
+		var preferencesPanel = document.getElementById('frcn-cookie-preferences');
+		var preferencesPanelOpener = null;
+		var preferencesPanelKeydownBound = false;
+
+		function isPreferencesPanelOpen() {
+			return !!preferencesPanel && !preferencesPanel.hidden;
+		}
+
+		function getPreferencesFocusable() {
+			return getFocusableElements(preferencesPanel);
+		}
+
+		function trapPreferencesFocus(event) {
+			var focusable = getPreferencesFocusable();
 
 			if (!focusable.length) {
 				return;
@@ -555,130 +845,272 @@
 			}
 		}
 
-		/**
-		 * Keydown handler bound only while the popup (true modal) layout is
-		 * open: Tab/Shift+Tab loop within the dialog's own focusable elements
-		 * (trapFocus()) and Escape is treated as an explicit reject — a valid,
-		 * equivalent consent decision, not a silent dismissal — so a keyboard
-		 * user always has a way out that doesn't just abandon the dialog
-		 * without a decision being recorded (see handleDecision()).
-		 */
-		function handleModalKeydown(event) {
+		function handlePreferencesKeydown(event) {
 			if (event.key === 'Tab') {
-				trapFocus(event);
+				trapPreferencesFocus(event);
 			} else if (event.key === 'Escape' || event.key === 'Esc') {
 				event.preventDefault();
-				handleDecision('rejected');
+				closePreferencesPanel();
 			}
 		}
 
-		var decided = false;
-
-		function handleDecision(decision) {
-			if (decided) {
+		/**
+		 * Reflects the visitor's current, actually-recorded per-category
+		 * decision onto each [data-frcn-category] toggle independently every
+		 * time the panel opens — reading the frontconsent_categories cookie
+		 * (written by setCategoriesCookie() above), not the single binary
+		 * consent cookie, so unchecking Marketing while leaving Analytics
+		 * checked is reflected as two different states, not one flag mirrored
+		 * onto both toggles.
+		 *
+		 * Backward compatibility: a visitor who accepted before this cookie
+		 * existed has no frontconsent_categories cookie yet — for them,
+		 * 'accepted' previously meant everything was allowed, so both
+		 * toggles show checked (matching that same reality) until they make
+		 * an explicit per-category choice here. Absent or rejected: both
+		 * unchecked.
+		 */
+		function syncPreferencesToggles() {
+			if (!preferencesPanel) {
 				return;
 			}
 
-			decided = true;
+			var accepted = readCookie(frcnCookieNotice.cookieName) === 'accepted';
+			var storedCategoriesRaw = readCookie(frcnCookieNotice.categoriesCookieName);
+			var storedCategories = null;
 
-			setConsentCookie(decision);
-			updateConsentMode(decision);
-			announce(decision === 'accepted' ? i18n.accepted : i18n.rejected);
-			hideBanner();
-			setUpReopenTrigger();
-			dispatchConsentEvent(decision);
-			logDecision(decision);
+			if (storedCategoriesRaw) {
+				try {
+					var parsed = JSON.parse(storedCategoriesRaw);
 
-			if (decision === 'accepted') {
-				fetchAndInjectScripts();
-			} else {
-				purgeTrackingCookies();
+					if (parsed && typeof parsed === 'object') {
+						storedCategories = parsed;
+					}
+				} catch (e) {
+					// Malformed/tampered cookie value: treat it the same as
+					// no categories cookie at all (the accepted/rejected
+					// fallback below).
+					storedCategories = null;
+				}
 			}
-		}
 
-		function updateConsentMode(decision) {
-			var granted = decision === 'accepted' ? 'granted' : 'denied';
+			var toggles = preferencesPanel.querySelectorAll('[data-frcn-category]');
 
-			window.dataLayer = window.dataLayer || [];
-			window.gtag = window.gtag || function () {
-				window.dataLayer.push(arguments);
-			};
-			window.gtag('consent', 'update', {
-				ad_storage: granted,
-				ad_user_data: granted,
-				ad_personalization: granted,
-				analytics_storage: granted
+			Array.prototype.forEach.call(toggles, function (toggle) {
+				var category = toggle.getAttribute('data-frcn-category');
+
+				if (storedCategories && Object.prototype.hasOwnProperty.call(storedCategories, category)) {
+					toggle.checked = !!storedCategories[category];
+				} else {
+					// No explicit stored value for this category (cookie
+					// missing/unparseable, or simply doesn't mention it yet):
+					// fall back to the binary cookie's own "everything was
+					// allowed/nothing was allowed" reality.
+					toggle.checked = accepted;
+				}
 			});
 		}
 
-		function setConsentCookie(decision) {
-			var maxAge = parseInt(frcnCookieNotice.expirationDays, 10) * 24 * 60 * 60;
-			var secure = window.location.protocol === 'https:' ? '; Secure' : '';
-
-			document.cookie = frcnCookieNotice.cookieName + '=' + decision +
-				'; path=' + frcnCookieNotice.cookiePath + '; max-age=' + maxAge + '; SameSite=Lax' + secure;
-		}
-
-		function hideBanner() {
-			banner.classList.add('frcn-cookie-notice--hidden');
-			document.body.classList.remove('frcn-cookie-notice-lock-scroll');
-			document.removeEventListener('keydown', handleModalKeydown);
-
-			if (isPopup && previouslyFocused && typeof previouslyFocused.focus === 'function') {
-				previouslyFocused.focus({ preventScroll: true });
+		function openPreferencesPanel(trigger) {
+			if (!preferencesPanel) {
+				return;
 			}
 
-			window.setTimeout(function () {
-				if (banner.parentNode) {
-					banner.parentNode.removeChild(banner);
-				}
-			}, 300);
-		}
+			// A fresh session of "changing their mind": lets a visitor who
+			// already decided make (and log) a new decision from the
+			// reopened panel instead of being silently blocked by the
+			// same-page debounce above.
+			decided = false;
+			syncPreferencesToggles();
+			preferencesPanelOpener = trigger || document.activeElement;
+			preferencesPanel.hidden = false;
+			document.body.classList.add('frcn-cookie-notice-lock-scroll');
 
-		function dispatchConsentEvent(decision) {
-			var event;
+			var focusable = getPreferencesFocusable();
 
-			try {
-				event = new CustomEvent('frcnCookieConsent', { detail: { consent: decision } });
-			} catch (e) {
-				event = document.createEvent('CustomEvent');
-				event.initCustomEvent('frcnCookieConsent', true, true, { consent: decision });
+			if (focusable.length) {
+				focusable[0].focus({ preventScroll: true });
 			}
 
-			document.dispatchEvent(event);
+			if (!preferencesPanelKeydownBound) {
+				document.addEventListener('keydown', handlePreferencesKeydown);
+				preferencesPanelKeydownBound = true;
+			}
+
+			announce(i18n.bannerOpened);
 		}
 
-		function logDecision(decision) {
-			var nonceForm = new FormData();
-			nonceForm.append('action', 'frcn_get_cookie_notice_log_nonce');
+		function closePreferencesPanel() {
+			if (!preferencesPanel || preferencesPanel.hidden) {
+				return;
+			}
 
-			fetch(frcnCookieNotice.ajaxUrl, {
-				method: 'POST',
-				credentials: 'same-origin',
-				body: nonceForm
-			})
-				.then(function (response) {
-					return response.json();
-				})
-				.then(function (response) {
-					if (!response || !response.success || !response.data) {
-						return;
-					}
+			preferencesPanel.hidden = true;
 
-					var formData = new FormData();
-					formData.append('action', 'frcn_log_cookie_consent');
-					formData.append('nonce', response.data.nonce);
-					formData.append('decision', decision);
+			if (!isPopup || !banner || banner.classList.contains('frcn-cookie-notice--hidden')) {
+				document.body.classList.remove('frcn-cookie-notice-lock-scroll');
+			}
 
-					return fetch(frcnCookieNotice.ajaxUrl, {
-						method: 'POST',
-						credentials: 'same-origin',
-						body: formData
-					});
-				})
-				.catch(function () {
-					// Best-effort: the aggregate stat is not critical to the consent flow.
+			if (preferencesPanelKeydownBound) {
+				document.removeEventListener('keydown', handlePreferencesKeydown);
+				preferencesPanelKeydownBound = false;
+			}
+
+			if (preferencesPanelOpener && typeof preferencesPanelOpener.focus === 'function') {
+				preferencesPanelOpener.focus({ preventScroll: true });
+			}
+
+			preferencesPanelOpener = null;
+		}
+
+		/**
+		 * Every non-necessary category toggle a PRO add-on rendered on
+		 * frcn_cookie_preferences_categories (see render_preferences_panel())
+		 * is expected to carry a `data-frcn-category="<slug>"` attribute on a
+		 * checkable control — read back here so "Save changes" can compute
+		 * both the categories map and the binary decision it implies. The
+		 * Free tier renders none, so this is always just { necessary: true }
+		 * until an add-on extends the panel.
+		 */
+		function collectPreferencesCategories() {
+			var categories = { necessary: true };
+
+			if (!preferencesPanel) {
+				return categories;
+			}
+
+			var toggles = preferencesPanel.querySelectorAll('[data-frcn-category]');
+
+			Array.prototype.forEach.call(toggles, function (toggle) {
+				categories[toggle.getAttribute('data-frcn-category')] = !!toggle.checked;
+			});
+
+			return categories;
+		}
+
+		if (preferencesPanel) {
+			var closeBtn = preferencesPanel.querySelector('[data-frcn-cookie-action="close-preferences"]');
+			var panelAcceptBtn = preferencesPanel.querySelector('[data-frcn-cookie-action="accept"]');
+			var panelRejectBtn = preferencesPanel.querySelector('[data-frcn-cookie-action="reject"]');
+			var panelSaveBtn = preferencesPanel.querySelector('[data-frcn-cookie-action="save"]');
+
+			if (closeBtn) {
+				closeBtn.addEventListener('click', function () {
+					closePreferencesPanel();
 				});
+			}
+
+			if (panelAcceptBtn) {
+				panelAcceptBtn.addEventListener('click', function () {
+					var categories = collectPreferencesCategories();
+
+					Object.keys(categories).forEach(function (key) {
+						categories[key] = true;
+					});
+
+					handleDecision('accepted', categories);
+				});
+			}
+
+			if (panelRejectBtn) {
+				panelRejectBtn.addEventListener('click', function () {
+					// Explicit, real "both off" state — not an ambiguous
+					// absence of analytics/marketing keys — so the categories
+					// cookie (and the server-side allowedCategories it drives)
+					// reflects an actual decision rather than "unspecified".
+					handleDecision('rejected', { necessary: true, analytics: false, marketing: false });
+				});
+			}
+
+			if (panelSaveBtn) {
+				panelSaveBtn.addEventListener('click', function () {
+					var categories = collectPreferencesCategories();
+					var hasOptionalConsent = Object.keys(categories).some(function (key) {
+						return key !== 'necessary' && categories[key];
+					});
+
+					handleDecision(hasOptionalConsent ? 'accepted' : 'rejected', categories);
+				});
+			}
+		}
+
+		requestTrackingIfNeeded();
+		setUpReopenTrigger(openPreferencesPanel);
+
+		if (!banner) {
+			return;
+		}
+
+		if (hideBannerIfDecided()) {
+			// Already decided: nothing left to wire up on the banner itself
+			// (the preferences panel and reopen trigger stay available).
+			return;
+		}
+
+		var acceptBtn = banner.querySelector('[data-frcn-cookie-action="accept"]');
+		var rejectBtn = banner.querySelector('[data-frcn-cookie-action="reject"]');
+		var customizeBtn = banner.querySelector('[data-frcn-cookie-action="customize"]');
+
+		function hideBannerIfDecided() {
+			var consent = readCookie(frcnCookieNotice.cookieName);
+
+			// An add-on tracking per-category consent (analytics vs. marketing) can
+			// define this to say "the categories cookie is stale — e.g. the site
+			// admin just added a new integration — so re-prompt even though the
+			// legacy accepted/rejected cookie here still looks decided."
+			if (typeof window.frcnCookieNoticeIsConsentStale === 'function' && window.frcnCookieNoticeIsConsentStale()) {
+				return false;
+			}
+
+			if (consent === 'accepted' || consent === 'rejected') {
+				banner.style.display = 'none';
+				return true;
+			}
+
+			return false;
+		}
+
+		revealBanner();
+
+		if (acceptBtn) {
+			// preventDefault() is what stops the button's form="..." submit
+			// attribute (the no-JS fallback — see render_banner_markup() and
+			// log_consent_form_callback()) from actually navigating the page
+			// away when JavaScript can run: this handles the decision instead,
+			// entirely client-side.
+			acceptBtn.addEventListener('click', function (event) {
+				event.preventDefault();
+				handleDecision('accepted');
+			});
+		}
+
+		if (rejectBtn) {
+			rejectBtn.addEventListener('click', function (event) {
+				event.preventDefault();
+				handleDecision('rejected');
+			});
+		}
+
+		if (customizeBtn) {
+			// Opens the same preferences panel the reopen trigger uses — not
+			// routed through handleDecision(): clicking it isn't a decision by
+			// itself, just a request to see more detail. A CustomEvent is
+			// still dispatched afterwards so any existing listener bound to it
+			// keeps working.
+			customizeBtn.addEventListener('click', function () {
+				openPreferencesPanel(customizeBtn);
+
+				var event;
+
+				try {
+					event = new CustomEvent('frcnCookieNoticeCustomize');
+				} catch (e) {
+					event = document.createEvent('CustomEvent');
+					event.initCustomEvent('frcnCookieNoticeCustomize', true, true, null);
+				}
+
+				document.dispatchEvent(event);
+			});
 		}
 	}
 })();

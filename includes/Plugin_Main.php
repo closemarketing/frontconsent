@@ -60,6 +60,9 @@ class Plugin_Main {
 		if ( ! class_exists( 'FrontConsent\Frontend\CookieNotice' ) ) {
 			require_once FRCN_PLUGIN_PATH . 'includes/Frontend/CookieNotice.php';
 		}
+		if ( ! class_exists( 'FrontConsent\Frontend\ScriptBlocker' ) ) {
+			require_once FRCN_PLUGIN_PATH . 'includes/Frontend/ScriptBlocker.php';
+		}
 		if ( ! class_exists( 'FrontConsent\Migration' ) ) {
 			require_once FRCN_PLUGIN_PATH . 'includes/Migration.php';
 		}
@@ -75,8 +78,10 @@ class Plugin_Main {
 		// so the cache-purge/frcn_cookie_notice_settings_updated side of this
 		// doesn't depend on CookieNotice's hooks being registered yet either.
 		Migration::maybe_run();
+		Migration::maybe_disable_frontblocks_pro_categories();
 
 		new Frontend\CookieNotice();
+		new Frontend\ScriptBlocker();
 
 		$this->load_modules();
 	}
