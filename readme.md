@@ -5,6 +5,7 @@ Repository for FrontConsent, a WordPress plugin providing a GDPR/ePrivacy-compli
 ## Functionalities
 
 - **Cookie Notice** — configurable cookie consent banner (bar/box/popup) that gates Google Tag Manager, GA4, and supported tracking integrations (Clientify, Brevo, ChatGPT Ads) behind consent, with Google Consent Mode v2 support for compatibility with Google Site Kit and other analytics plugins.
+- **Cookieless video embeds** — YouTube iframes are switched to `youtube-nocookie.com` and Vimeo iframes get `dnt=1`, so embedded videos set no cookies before consent (filter `frcn_privacy_enhanced_embeds`).
 - **Acceptance stats** — aggregate accepted/rejected counter on the settings page.
 - **Migration from FrontBlocks** — automatically imports settings and stats from FrontBlocks Site Tools' bundled Cookie Notice module, which FrontConsent replaces.
 - **Import from GDPR Cookie Compliance** — explicit "Import settings" action that maps its Integrations tab (GA4, GTM, and the container configured in GTM4WP) and banner texts/expiration/position into FrontConsent without overwriting existing values; unsupported integrations (Google Ads, Meta Pixel, Microsoft UET/Clarity, reCAPTCHA) are reported, not imported. See `includes/GDPR_Cookie_Compliance_Migration.php`.
