@@ -1,5 +1,5 @@
 === FrontConsent ===
-Contributors: davidperez, sacrajaimez, alexcm13, closetechnology
+Contributors: davidperez, sacrajaimez, alexcm13, closetechnology, amulero
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
@@ -90,6 +90,7 @@ Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-
 
 = Unreleased =
 * Added a Scanner tab that checks the site's cookie compliance through tuwebcumple.es and lists the result per requirement, plus a dashboard widget with the last grade.
+* The Reject button now has the same style as Accept, so neither choice is visually favoured over the other.
 
 = 1.0.2 =
 * Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.
