@@ -4,7 +4,7 @@ Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
 Stable tag: 1.0.2
-Version: 1.0.3-beta.youtube
+Version: 1.0.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -90,7 +90,6 @@ Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-
 
 = Unreleased =
 * Added a Scanner tab that checks the site's cookie compliance through tuwebcumple.es and lists the result per requirement, plus a dashboard widget with the last grade.
-* YouTube embeds now load from `youtube-nocookie.com` and Vimeo embeds get `dnt=1`, so videos set no cookies before the visitor decides. Editors keep pasting normal links; the URL is rewritten on output (lazy-loaded embeds included). Turn it off with the `frcn_privacy_enhanced_embeds` filter.
 
 = 1.0.2 =
 * Added an importer for GDPR Cookie Compliance settings in a new Integrations tab: migrates banner texts, layout, position, policy link and tracking IDs (GTM, GA4, GT-/AW-), enables the banner and reports any integration it couldn't map.
