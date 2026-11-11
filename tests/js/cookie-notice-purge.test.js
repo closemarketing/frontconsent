@@ -124,7 +124,7 @@ function createEnvironment(initialCookies, initialSessionStorage) {
 	});
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners, sessionStorage };
+	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners, sessionStorage, setCookie: (raw) => cookies.set(raw) };
 }
 
 test('rejecting deletes tracking cookies set on the host and on parent domains', () => {
@@ -142,8 +142,10 @@ test('rejecting deletes tracking cookies set on the host and on parent domains',
 });
 
 test('accepting keeps tracking cookies', () => {
-	const environment = createEnvironment([['_ga', 'GA1.1.1', '.example.com']]);
+	const environment = createEnvironment([]);
 
+	// Set after page load, so only the accept handler could remove it.
+	environment.setCookie('_ga=GA1.1.1; domain=.example.com; path=/');
 	environment.actionListeners.accept({ preventDefault() {} });
 
 	assert.ok(environment.cookieNames().includes('_ga'));
@@ -156,6 +158,14 @@ test('a returning rejected visitor has leftover tracking cookies cleared on page
 	]);
 
 	assert.deepEqual(environment.cookieNames(), ['frcn_cookie_consent']);
+});
+
+test('an undecided visitor has leftover tracking cookies cleared on page load', () => {
+	// Google Analytics rewrites its _ga_* session cookie while the page
+	// unloads for the withdrawal reload, after the reopen handler's purge.
+	const environment = createEnvironment([['_ga_ABC123', 'GS2.1.s1', '.example.com']]);
+
+	assert.deepEqual(environment.cookieNames(), []);
 });
 
 test('withdrawing an earlier acceptance deletes tracking cookies', () => {
