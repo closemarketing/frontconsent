@@ -130,16 +130,15 @@
 	outline-offset: 2px;
 }
 
-.frcn-cookie-notice__button--accept {
+/*
+ * Accept and Reject share the exact same style, so neither choice is
+ * visually favoured over the other.
+ */
+.frcn-cookie-notice__button--accept,
+.frcn-cookie-notice__button--reject {
 	background-color: var(--frcn-cookie-accent);
 	border: 1px solid var(--frcn-cookie-accent);
 	color: var(--frcn-cookie-accent-contrast);
-}
-
-.frcn-cookie-notice__button--reject {
-	background-color: transparent;
-	border: 1px solid #9ca3af;
-	color: var(--frcn-cookie-text);
 }
 
 /* Bar layout: floating bottom bar, spanning most of the viewport width. */
