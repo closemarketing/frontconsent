@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const scriptPath = path.resolve(__dirname, '../../assets/cookie-notice/frontconsent-cookie-notice.js');
 const cookieNoticeScript = fs.readFileSync(scriptPath, 'utf8');
 
-const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', 'sbjs_*'];
+const PURGE_COOKIES = ['_ga', '_ga_*', '_gid', '__obref', 'oaiq_*', 'sbjs_*'];
 
 /**
  * Minimal cookie jar keyed by name + domain, so a cookie set on
@@ -43,7 +43,19 @@ function createCookieJar(initial) {
 	};
 }
 
-function createEnvironment(initialCookies) {
+function createStorage(initial) {
+	const items = new Map(Object.entries(initial || {}));
+
+	return {
+		get length() { return items.size; },
+		key(index) { return Array.from(items.keys())[index] || null; },
+		removeItem(key) { items.delete(key); },
+		keys() { return Array.from(items.keys()); }
+	};
+}
+
+function createEnvironment(initialCookies, initialSessionStorage) {
+	const sessionStorage = createStorage(initialSessionStorage);
 	const cookies = createCookieJar(initialCookies);
 	const listeners = {};
 	const actionListeners = {};
@@ -86,6 +98,7 @@ function createEnvironment(initialCookies) {
 	};
 	const window = {
 		location: { protocol: 'https:', hostname: 'www.example.com', reload() {} },
+		sessionStorage,
 		setTimeout(callback) { callback(); }
 	};
 
@@ -111,7 +124,7 @@ function createEnvironment(initialCookies) {
 	});
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners };
+	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners, sessionStorage };
 }
 
 test('rejecting deletes tracking cookies set on the host and on parent domains', () => {
@@ -156,4 +169,27 @@ test('withdrawing an earlier acceptance deletes tracking cookies', () => {
 	environment.reopenListeners.click();
 
 	assert.deepEqual(environment.cookieNames(), []);
+});
+
+test('withdrawing an earlier acceptance also deletes the ChatGPT Ads pixel cookie and storage entry', () => {
+	const environment = createEnvironment(
+		[
+			['frcn_cookie_consent', 'accepted', ''],
+			['__obref', 'abc', '']
+		],
+		{ 'oaiq_cs:PIXEL123': '1', unrelated: 'keep' }
+	);
+
+	environment.reopenListeners.click();
+
+	assert.deepEqual(environment.cookieNames(), []);
+	assert.deepEqual(environment.sessionStorage.keys(), ['unrelated']);
+});
+
+test('rejecting clears tracking entries kept in web storage', () => {
+	const environment = createEnvironment([], { 'oaiq_cs:PIXEL123': '1', unrelated: 'keep' });
+
+	environment.actionListeners.reject({ preventDefault() {} });
+
+	assert.deepEqual(environment.sessionStorage.keys(), ['unrelated']);
 });
