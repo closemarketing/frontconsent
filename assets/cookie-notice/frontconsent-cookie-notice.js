@@ -455,10 +455,14 @@
 		requestTrackingIfNeeded();
 		setUpReopenTrigger();
 
-		// A rejected visitor may still carry cookies from before the decision
-		// (an earlier acceptance, or a tag that ran before FrontConsent was
-		// installed): clear them on every page view.
-		if (readCookie(frcnCookieNotice.cookieName) === 'rejected') {
+		// Without an acceptance nothing may be stored, so clear tracking
+		// cookies on every page view. This covers a rejected visitor carrying
+		// cookies from before the decision (an earlier acceptance, or a tag
+		// that ran before FrontConsent was installed) and an undecided one
+		// right after withdrawing: Google Analytics rewrites its _ga_*
+		// session cookie while the page unloads for the withdrawal reload,
+		// after the purge in the reopen handler has already run.
+		if (readCookie(frcnCookieNotice.cookieName) !== 'accepted') {
 			purgeTrackingCookies();
 		}
 
