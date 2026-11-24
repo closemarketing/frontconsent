@@ -54,9 +54,12 @@ function createStorage(initial) {
 	};
 }
 
-function createEnvironment(initialCookies, initialSessionStorage) {
+function createEnvironment(initialCookies, initialSessionStorage, windowProps) {
 	const sessionStorage = createStorage(initialSessionStorage);
 	const cookies = createCookieJar(initialCookies);
+	const cookieNames = () => Array.from(cookies.jar.values()).map((cookie) => cookie.name);
+	// Each dispatched document event, with the cookies present at that moment.
+	const events = [];
 	const listeners = {};
 	const actionListeners = {};
 	const reopenListeners = {};
@@ -90,21 +93,21 @@ function createEnvironment(initialCookies, initialSessionStorage) {
 		readyState: 'loading',
 		addEventListener(event, callback) { listeners[event] = callback; },
 		createElement() { return {}; },
-		dispatchEvent() {},
+		dispatchEvent(event) { events.push({ type: event.type, cookies: cookieNames() }); },
 		getElementById(id) { return id === 'frcn-cookie-reopen' ? reopenBtn : banner; },
 		getElementsByTagName() { return []; },
 		querySelectorAll() { return []; },
 		removeEventListener() {}
 	};
-	const window = {
+	const window = Object.assign({
 		location: { protocol: 'https:', hostname: 'www.example.com', reload() {} },
 		sessionStorage,
 		setTimeout(callback) { callback(); }
-	};
+	}, windowProps);
 
 	vm.runInNewContext(cookieNoticeScript, {
 		Array,
-		CustomEvent: function () {},
+		CustomEvent: function (type) { this.type = type; },
 		Date,
 		FormData: function () { this.append = function () {}; },
 		decodeURIComponent,
@@ -124,7 +127,7 @@ function createEnvironment(initialCookies, initialSessionStorage) {
 	});
 	listeners.DOMContentLoaded();
 
-	return { actionListeners, cookieNames: () => Array.from(cookies.jar.values()).map((cookie) => cookie.name), reopenListeners, sessionStorage, setCookie: (raw) => cookies.set(raw) };
+	return { actionListeners, cookieNames, events, reopenListeners, sessionStorage, setCookie: (raw) => cookies.set(raw), window };
 }
 
 test('rejecting deletes tracking cookies set on the host and on parent domains', () => {
@@ -202,4 +205,136 @@ test('rejecting clears tracking entries kept in web storage', () => {
 	environment.actionListeners.reject({ preventDefault() {} });
 
 	assert.deepEqual(environment.sessionStorage.keys(), ['unrelated']);
+});
+
+test('withdrawing sends a denied Consent Mode update before deleting tracking cookies', () => {
+	const updates = [];
+	let environment;
+	const gtag = function (command, type, params) {
+		if ('consent' === command && 'update' === type) {
+			updates.push({ params, cookies: environment.cookieNames() });
+		}
+	};
+
+	environment = createEnvironment(
+		[
+			['frcn_cookie_consent', 'accepted', ''],
+			['_ga_ABC123', 'GS1.1', '.example.com']
+		],
+		{},
+		{ gtag }
+	);
+	environment.reopenListeners.click();
+
+	const denied = updates.find((update) => 'denied' === update.params.analytics_storage);
+
+	assert.ok(denied, 'No denied Consent Mode update was sent on withdrawal');
+	assert.deepEqual(
+		{ ...denied.params },
+		{ ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied' }
+	);
+	// Sent while the cookie was still there, so Google tags stop writing
+	// before the purge instead of recreating it right after.
+	assert.ok(denied.cookies.includes('_ga_ABC123'));
+	assert.deepEqual(environment.cookieNames(), []);
+});
+
+test('withdrawing queues the denied Consent Mode update on the dataLayer when gtag is not defined', () => {
+	const environment = createEnvironment([['frcn_cookie_consent', 'accepted', '']]);
+
+	environment.reopenListeners.click();
+
+	const pushed = (environment.window.dataLayer || []).map((entry) => Array.from(entry));
+	const update = pushed.find((args) => 'consent' === args[0] && 'update' === args[1]);
+
+	assert.ok(update, 'No Consent Mode update was pushed to the dataLayer');
+	assert.equal(update[2].analytics_storage, 'denied');
+	assert.equal(update[2].ad_storage, 'denied');
+});
+
+test('withdrawing dispatches frcnCookieConsentWithdrawn after the consent cookie is gone and before the purge', () => {
+	const environment = createEnvironment([
+		['frcn_cookie_consent', 'accepted', ''],
+		['_ga', 'GA1.1.1', '.example.com']
+	]);
+
+	environment.reopenListeners.click();
+
+	const withdrawn = environment.events.find((event) => 'frcnCookieConsentWithdrawn' === event.type);
+
+	assert.ok(withdrawn, 'frcnCookieConsentWithdrawn was not dispatched');
+	assert.ok(!withdrawn.cookies.includes('frcn_cookie_consent'));
+	assert.ok(withdrawn.cookies.includes('_ga'));
+});
+
+test('an add-on can narrow the cookies to delete with frcnCookieNoticeFilterPurgePatterns', () => {
+	let received;
+	const environment = createEnvironment(
+		[],
+		{},
+		{
+			frcnCookieNoticeFilterPurgePatterns(patterns) {
+				received = patterns;
+				// Mutating the copy it receives must not change the plugin's list.
+				patterns.push('should_not_leak');
+				return patterns.filter((pattern) => '_ga' !== pattern && '_ga_*' !== pattern);
+			}
+		}
+	);
+
+	environment.setCookie('_ga=GA1.1.1; domain=.example.com; path=/');
+	environment.setCookie('_gid=GA1.1.2; path=/');
+	environment.actionListeners.reject({ preventDefault() {} });
+
+	assert.ok(received.includes('_gid'));
+	assert.ok(environment.cookieNames().includes('_ga'));
+	assert.ok(!environment.cookieNames().includes('_gid'));
+});
+
+test('a filter that does not return an array is ignored and every tracking cookie is deleted', () => {
+	const environment = createEnvironment([], {}, { frcnCookieNoticeFilterPurgePatterns() {} });
+
+	environment.setCookie('_ga=GA1.1.1; domain=.example.com; path=/');
+	environment.actionListeners.reject({ preventDefault() {} });
+
+	assert.ok(!environment.cookieNames().includes('_ga'));
+});
+
+test('withdrawing deletes every tracking cookie even when an add-on filter would keep some', () => {
+	let calls = 0;
+	const environment = createEnvironment(
+		[
+			['frcn_cookie_consent', 'accepted', ''],
+			['_ga', 'GA1.1.1', '.example.com']
+		],
+		{},
+		{
+			frcnCookieNoticeFilterPurgePatterns(patterns) {
+				calls++;
+				return patterns.filter((pattern) => '_ga' !== pattern);
+			}
+		}
+	);
+
+	environment.reopenListeners.click();
+
+	assert.equal(calls, 0);
+	assert.deepEqual(environment.cookieNames(), []);
+});
+
+test('a filter that throws does not stop the purge', () => {
+	const environment = createEnvironment(
+		[],
+		{},
+		{
+			frcnCookieNoticeFilterPurgePatterns() {
+				throw new Error('broken add-on');
+			}
+		}
+	);
+
+	environment.setCookie('_ga=GA1.1.1; domain=.example.com; path=/');
+	assert.doesNotThrow(() => environment.actionListeners.reject({ preventDefault() {} }));
+
+	assert.ok(!environment.cookieNames().includes('_ga'));
 });
