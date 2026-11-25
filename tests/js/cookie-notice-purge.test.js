@@ -338,3 +338,19 @@ test('a filter that throws does not stop the purge', () => {
 
 	assert.ok(!environment.cookieNames().includes('_ga'));
 });
+
+test('a filter that returns non-string patterns is ignored and the page still loads', () => {
+	let environment;
+
+	assert.doesNotThrow(() => {
+		environment = createEnvironment(
+			[['_ga', 'GA1.1.1', '.example.com']],
+			{},
+			{ frcnCookieNoticeFilterPurgePatterns() { return [null, '_gid']; } }
+		);
+	});
+
+	// The page-load purge used the full list, and the banner was wired.
+	assert.deepEqual(environment.cookieNames(), []);
+	assert.equal(typeof environment.actionListeners.reject, 'function');
+});

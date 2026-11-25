@@ -78,7 +78,11 @@
 			try {
 				var filtered = window.frcnCookieNoticeFilterPurgePatterns(patterns.slice());
 
-				if (Array.isArray(filtered)) {
+				// Only a list of non-empty strings is usable: anything else
+				// (e.g. [null]) would throw while matching cookie names below.
+				if (Array.isArray(filtered) && filtered.every(function (pattern) {
+					return 'string' === typeof pattern && '' !== pattern;
+				})) {
 					patterns = filtered;
 				}
 			} catch (e) {
