@@ -66,8 +66,29 @@
 	 * parent domain of the current host, since tags such as GA set theirs
 	 * on the registrable domain ('.example.com') rather than the exact host.
 	 */
-	function purgeTrackingCookies() {
+	function purgeTrackingCookies(ignoreFilter) {
 		var patterns = Array.isArray(frcnCookieNotice.purgeCookies) ? frcnCookieNotice.purgeCookies : [];
+
+		// An add-on that lets the visitor grant only part of the tracking
+		// (e.g. FrontConsent PRO's categories) can keep the cookies of what
+		// was granted by narrowing the list here. It receives a copy and must
+		// return the patterns that should still be deleted. A full withdrawal
+		// skips it: nothing is granted any more, so everything goes.
+		if (!ignoreFilter && typeof window.frcnCookieNoticeFilterPurgePatterns === 'function') {
+			try {
+				var filtered = window.frcnCookieNoticeFilterPurgePatterns(patterns.slice());
+
+				// Only a list of non-empty strings is usable: anything else
+				// (e.g. [null]) would throw while matching cookie names below.
+				if (Array.isArray(filtered) && filtered.every(function (pattern) {
+					return 'string' === typeof pattern && '' !== pattern;
+				})) {
+					patterns = filtered;
+				}
+			} catch (e) {
+				// A broken filter must not stop the purge: delete everything.
+			}
+		}
 
 		if (!patterns.length) {
 			return;
@@ -133,6 +154,19 @@
 				// Storage unavailable: nothing to purge.
 			}
 		});
+	}
+
+	function dispatchDocumentEvent(name, detail) {
+		var event;
+
+		try {
+			event = new CustomEvent(name, { detail: detail });
+		} catch (e) {
+			event = document.createEvent('CustomEvent');
+			event.initCustomEvent(name, true, true, detail);
+		}
+
+		document.dispatchEvent(event);
 	}
 
 	function defineActivateGatedHelper() {
@@ -425,9 +459,26 @@
 		reopenTriggerWired = true;
 		reopenBtn.addEventListener('click', function () {
 			document.cookie = frcnCookieNotice.cookieName + '=; path=' + frcnCookieNotice.cookiePath + '; max-age=0; SameSite=Lax';
+			// Synchronous: an add-on keeping its own consent cookie (e.g. the
+			// PRO per-category cookie) deletes it here, before the purge below
+			// and the reload, so nothing it granted survives the withdrawal.
+			dispatchDocumentEvent('frcnCookieConsentWithdrawn', null);
+			// Deny before purging: this click is itself a tracked event, and
+			// Google Analytics would otherwise rewrite its _ga_* cookies right
+			// after the purge below, while the page is still granted.
+			window.dataLayer = window.dataLayer || [];
+			window.gtag = window.gtag || function () {
+				window.dataLayer.push(arguments);
+			};
+			window.gtag('consent', 'update', {
+				ad_storage: 'denied',
+				ad_user_data: 'denied',
+				ad_personalization: 'denied',
+				analytics_storage: 'denied'
+			});
 			// Withdrawing consent must not leave behind what was set while it
 			// was granted: the page reloads undecided, so nothing is allowed.
-			purgeTrackingCookies();
+			purgeTrackingCookies(true);
 
 			if (frcnCookieNotice.isPolicyPage && frcnCookieNotice.homeUrl) {
 				window.location.href = frcnCookieNotice.homeUrl;
