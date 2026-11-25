@@ -83,6 +83,7 @@ class CookieNotice {
 			add_action( 'wp_footer', array( $this, 'render_banner' ) );
 			add_filter( 'script_loader_tag', array( $this, 'gate_analytics_scripts' ), 10, 2 );
 			add_filter( 'gtm4wp_consent_mode_default_enabled', array( $this, 'filter_gtm4wp_consent_default' ) );
+			add_filter( 'rocket_delay_js_exclusions', array( $this, 'exclude_from_wp_rocket_delay_js' ) );
 		}
 
 		// The endpoints must stay available for logged-out and logged-in visitors alike.
@@ -179,6 +180,32 @@ class CookieNotice {
 		$tag = preg_replace( '/\stype=(["\'])[^"\']*\1/i', '', (string) $tag );
 
 		return preg_replace( '/^<script\b/i', '<script type="text/plain" data-frcn-consent="analytics"', (string) $tag, 1 );
+	}
+
+	/**
+	 * Keep the consent scripts out of WP Rocket's "Delay JavaScript execution".
+	 *
+	 * Delayed until the first scroll or click, the banner's buttons do nothing
+	 * on that first click, a returning visitor's Consent Mode "granted" reaches
+	 * the tags after they have already fired, and leftover tracking cookies are
+	 * not cleared. Each pattern is matched against the whole <script> tag.
+	 *
+	 * @param string[] $exclusions WP Rocket delay JS exclusion patterns.
+	 * @return string[]
+	 */
+	public function exclude_from_wp_rocket_delay_js( $exclusions ) {
+		$exclusions = is_array( $exclusions ) ? $exclusions : array();
+
+		return array_merge(
+			$exclusions,
+			array(
+				'/frontconsent/assets/',
+				'frontconsent-cookie-notice-js',
+				'frontconsent-consent-mode-default',
+				'frontconsent-consent-bootstrap',
+				'frcnCookieNotice',
+			)
+		);
 	}
 
 	/**
