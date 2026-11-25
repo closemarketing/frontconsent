@@ -24,10 +24,42 @@
 		var positionWrapper = document.getElementById('cookie-notice-position-wrapper');
 		var preview = document.getElementById('frcn-cookie-notice-preview');
 
-		if (layoutSelect && positionWrapper) {
-			layoutSelect.addEventListener('change', function () {
-				positionWrapper.style.display = layoutSelect.value === 'box' ? 'block' : 'none';
+		// Layout slug => { position slug: label }, printed by PHP so add-on
+		// layouts (frcn_cookie_notice_layout_positions) get their own
+		// positions without any change here.
+		var layoutPositions = {};
+
+		if (layoutSelect) {
+			try {
+				layoutPositions = JSON.parse(layoutSelect.getAttribute('data-layout-positions') || '{}') || {};
+			} catch (e) {
+				layoutPositions = {};
+			}
+		}
+
+		function syncPositionOptions() {
+			var positions = layoutPositions[layoutSelect.value] || {};
+			var slugs = Object.keys(positions);
+			var current = positionSelect.value;
+
+			positionWrapper.style.display = slugs.length ? 'block' : 'none';
+
+			if (!slugs.length) {
+				return;
+			}
+
+			positionSelect.innerHTML = '';
+			slugs.forEach(function (slug) {
+				var option = document.createElement('option');
+				option.value = slug;
+				option.textContent = positions[slug];
+				positionSelect.appendChild(option);
 			});
+			positionSelect.value = slugs.indexOf(current) !== -1 ? current : slugs[0];
+		}
+
+		if (layoutSelect && positionSelect && positionWrapper) {
+			layoutSelect.addEventListener('change', syncPositionOptions);
 		}
 
 		function updatePreviewLayout() {
@@ -36,6 +68,13 @@
 			}
 
 			var layout = layoutSelect ? layoutSelect.value : 'bar';
+
+			// An add-on layout brings its own frontend; the preview only knows
+			// the built-in styles, so show it as the bar (the free banner's own
+			// fallback for unknown layouts).
+			if (['bar', 'box', 'popup'].indexOf(layout) === -1) {
+				layout = 'bar';
+			}
 			var position = positionSelect ? positionSelect.value : 'bottom-right';
 
 			preview.className = 'frcn-cookie-notice frcn-cookie-notice-preview frcn-cookie-notice--' + layout;
