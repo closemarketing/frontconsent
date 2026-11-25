@@ -3,7 +3,7 @@ Contributors: davidperez, sacrajaimez, alexcm13, closetechnology, amulero
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 Version: 1.0.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -87,6 +87,11 @@ If a site administrator adds a ChatGPT Ads Pixel ID, the visitor's browser loads
 Service provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Changelog ==
+
+= 1.0.4 =
+* The Settings tab no longer leaves an empty column on the left of the Cookie Notice panel; the settings now use the full width.
+* WP Rocket: FrontConsent's own scripts are excluded from "Delay JavaScript execution", so the banner responds to the first click and Consent Mode reaches Google tags before they fire.
+* Developers: the Layout and Position options are now filterable with `frcn_cookie_notice_layouts` and `frcn_cookie_notice_layout_positions`, and the saved position is checked against the selected layout. FrontConsent PRO uses this to add its compact card layout.
 
 = 1.0.3 =
 * Added a Scanner tab that checks the site's cookie compliance through tuwebcumple.es and lists the result per requirement, plus a dashboard widget with the last grade.
