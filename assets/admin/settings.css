@@ -342,3 +342,13 @@
 	background: #4054d6;
 	color: #fff;
 }
+
+/* Single full-width settings field: hide the Settings API's label column. */
+.frcn-settings-wrapper .form-table tr.frcn-field-row--full > th {
+	display: none;
+}
+
+.frcn-settings-wrapper .form-table tr.frcn-field-row--full > td {
+	padding-left: 0;
+	padding-right: 0;
+}

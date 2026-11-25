@@ -177,7 +177,11 @@ class Settings {
 			__( 'Cookie Notice', 'frontconsent' ),
 			array( $this, 'field_cookie_notice' ),
 			$this->page_slug,
-			'frontconsent_section_cookie_notice'
+			'frontconsent_section_cookie_notice',
+			// The section heading already names this field; the class lets the
+			// stylesheet drop the Settings API's label column so the field uses
+			// the full panel width instead of leaving an empty gutter.
+			array( 'class' => 'frcn-field-row--full' )
 		);
 	}
 
