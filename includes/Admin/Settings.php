@@ -453,6 +453,9 @@ class Settings {
 		$policy_page_id        = (int) ( $options['cookie_notice_policy_page_id'] ?? 0 );
 		$layout                = (string) ( $options['cookie_notice_layout'] ?? 'bar' );
 		$position              = (string) ( $options['cookie_notice_position'] ?? 'bottom-right' );
+		$layouts               = CookieNotice::get_layouts();
+		$layout_positions      = CookieNotice::get_layout_positions();
+		$current_positions     = $layout_positions[ $layout ] ?? array();
 		$color                 = (string) ( $options['cookie_notice_color'] ?? '#687df9' );
 		$bg_color              = (string) ( $options['cookie_notice_bg_color'] ?? '#ffffff' );
 		$radius                = (string) ( $options['cookie_notice_radius'] ?? 'small' );
@@ -730,13 +733,14 @@ class Settings {
 								id="cookie_notice_layout"
 								name="<?php echo esc_attr( self::OPTION_NAME ); ?>[cookie_notice_layout]"
 								class="frcn-input"
+								data-layout-positions="<?php echo esc_attr( (string) wp_json_encode( $layout_positions ) ); ?>"
 							>
-								<option value="bar" <?php selected( $layout, 'bar' ); ?>><?php echo esc_html__( 'Full-width bar', 'frontconsent' ); ?></option>
-								<option value="box" <?php selected( $layout, 'box' ); ?>><?php echo esc_html__( 'Boxed panel', 'frontconsent' ); ?></option>
-								<option value="popup" <?php selected( $layout, 'popup' ); ?>><?php echo esc_html__( 'Centered popup', 'frontconsent' ); ?></option>
+								<?php foreach ( $layouts as $layout_slug => $layout_label ) : ?>
+									<option value="<?php echo esc_attr( $layout_slug ); ?>" <?php selected( $layout, $layout_slug ); ?>><?php echo esc_html( $layout_label ); ?></option>
+								<?php endforeach; ?>
 							</select>
 						</div>
-						<div id="cookie-notice-position-wrapper" style="<?php echo 'box' === $layout ? '' : 'display: none;'; ?>">
+						<div id="cookie-notice-position-wrapper" style="<?php echo $current_positions ? '' : 'display: none;'; ?>">
 							<label for="cookie_notice_position" class="frcn-label">
 								<?php echo esc_html__( 'Position', 'frontconsent' ); ?>
 							</label>
@@ -745,8 +749,9 @@ class Settings {
 								name="<?php echo esc_attr( self::OPTION_NAME ); ?>[cookie_notice_position]"
 								class="frcn-input"
 							>
-								<option value="bottom-right" <?php selected( $position, 'bottom-right' ); ?>><?php echo esc_html__( 'Bottom right', 'frontconsent' ); ?></option>
-								<option value="bottom-left" <?php selected( $position, 'bottom-left' ); ?>><?php echo esc_html__( 'Bottom left', 'frontconsent' ); ?></option>
+								<?php foreach ( $current_positions as $position_slug => $position_label ) : ?>
+									<option value="<?php echo esc_attr( $position_slug ); ?>" <?php selected( $position, $position_slug ); ?>><?php echo esc_html( $position_label ); ?></option>
+								<?php endforeach; ?>
 							</select>
 						</div>
 						<div>
@@ -987,11 +992,25 @@ class Settings {
 		}
 
 		if ( array_key_exists( 'cookie_notice_layout', $value ) ) {
-			$sanitized['cookie_notice_layout'] = in_array( $value['cookie_notice_layout'], array( 'bar', 'box', 'popup' ), true ) ? $value['cookie_notice_layout'] : 'bar';
+			$layouts                           = CookieNotice::get_layouts();
+			$sanitized['cookie_notice_layout'] = is_string( $value['cookie_notice_layout'] ) && isset( $layouts[ $value['cookie_notice_layout'] ] ) ? $value['cookie_notice_layout'] : 'bar';
 		}
 
 		if ( array_key_exists( 'cookie_notice_position', $value ) ) {
-			$sanitized['cookie_notice_position'] = in_array( $value['cookie_notice_position'], array( 'bottom-right', 'bottom-left' ), true ) ? $value['cookie_notice_position'] : 'bottom-right';
+			// Validate against the positions of the layout being saved (or the
+			// stored one); a layout without positions keeps the box default so
+			// switching back to the box layout still has a valid value.
+			$layout_for_position = (string) ( $sanitized['cookie_notice_layout'] ?? 'bar' );
+			$layout_positions    = CookieNotice::get_layout_positions();
+			$allowed_positions   = $layout_positions[ $layout_for_position ] ?? array();
+
+			if ( ! $allowed_positions ) {
+				$allowed_positions = $layout_positions['box'] ?? array( 'bottom-right' => '' );
+			}
+
+			$sanitized['cookie_notice_position'] = is_string( $value['cookie_notice_position'] ) && isset( $allowed_positions[ $value['cookie_notice_position'] ] )
+				? $value['cookie_notice_position']
+				: (string) array_key_first( $allowed_positions );
 		}
 
 		if ( array_key_exists( 'cookie_notice_color', $value ) ) {

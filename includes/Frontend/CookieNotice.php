@@ -1622,6 +1622,58 @@ class CookieNotice {
 	}
 
 	/**
+	 * Return the banner layouts offered in the Layout setting.
+	 *
+	 * The built-in layouts are rendered by this class. A layout added through
+	 * the filter is stored as-is, but this class still renders its own banner
+	 * markup as the full-width bar for it (see render_cookie_notice()), so the
+	 * add-on that registers it is responsible for its presentation.
+	 *
+	 * @return array<string, string> Layout slug => translated label.
+	 */
+	public static function get_layouts() {
+		$layouts = array(
+			'bar'   => __( 'Full-width bar', 'frontconsent' ),
+			'box'   => __( 'Boxed panel', 'frontconsent' ),
+			'popup' => __( 'Centered popup', 'frontconsent' ),
+		);
+
+		/**
+		 * Filters the banner layouts offered in the Layout setting.
+		 *
+		 * @param array<string, string> $layouts Layout slug => translated label.
+		 */
+		$filtered = apply_filters( 'frcn_cookie_notice_layouts', $layouts );
+
+		return is_array( $filtered ) && $filtered ? $filtered : $layouts;
+	}
+
+	/**
+	 * Return the positions each layout supports. A layout without an entry
+	 * has no Position setting.
+	 *
+	 * @return array<string, array<string, string>> Layout slug => (position slug => translated label).
+	 */
+	public static function get_layout_positions() {
+		$positions = array(
+			'box' => array(
+				'bottom-right' => __( 'Bottom right', 'frontconsent' ),
+				'bottom-left'  => __( 'Bottom left', 'frontconsent' ),
+			),
+		);
+
+		/**
+		 * Filters the positions each banner layout supports. The first
+		 * position of a layout is its default.
+		 *
+		 * @param array<string, array<string, string>> $positions Layout slug => (position slug => translated label).
+		 */
+		$filtered = apply_filters( 'frcn_cookie_notice_layout_positions', $positions );
+
+		return is_array( $filtered ) ? $filtered : $positions;
+	}
+
+	/**
 	 * Return the tracking integration types supported by FrontConsent and add-ons.
 	 *
 	 * @return string[] Tracking integration type slugs.
