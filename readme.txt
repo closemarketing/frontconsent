@@ -2,7 +2,7 @@
 Contributors: davidperez, sacrajaimez, alexcm13, closetechnology, amulero
 Tags: cookies, consent, gdpr, cookie notice, aepd
 Requires at least: 5.8
-Tested up to: 7.1
+Tested up to: 7.2
 Stable tag: 1.0.4
 Version: 1.0.3
 License: GPLv2 or later
